@@ -12,6 +12,10 @@ import {
   Route,
   Stethoscope,
   UserPlus,
+  Users,
+  AlertCircle,
+  Package,
+  CheckCircle,
 } from "lucide-react"
 import type { Role } from "@/lib/medical-data"
 import { Login } from "@/components/smartcare/login"
@@ -19,6 +23,8 @@ import { AppShell, type NavItem } from "@/components/smartcare/app-shell"
 import { PatientConsole } from "@/components/smartcare/patient/patient-console"
 import { DoctorCommandCenter } from "@/components/smartcare/doctor/doctor-command-center"
 import { AdminDashboard } from "@/components/smartcare/admin/admin-dashboard"
+import { StaffDashboard } from "@/components/smartcare/staff/staff-dashboard"
+import { PharmacyDashboard } from "@/components/smartcare/pharmacy/pharmacy-dashboard"
 
 const NAV: Record<Role, NavItem[]> = {
   patient: [
@@ -36,6 +42,20 @@ const NAV: Record<Role, NavItem[]> = {
     { key: "beds", label: "Bed Allocation Matrix", icon: <Bed className="h-4 w-4" /> },
     { key: "pharmacy", label: "Pharmacy Inventory", icon: <Pill className="h-4 w-4" /> },
     { key: "reports", label: "Clinical Reports", icon: <ClipboardList className="h-4 w-4" /> },
+  ],
+  staff: [
+    { key: "dashboard", label: "Dashboard", icon: <LayoutDashboard className="h-4 w-4" /> },
+    { key: "registration", label: "Patient Registration", icon: <UserPlus className="h-4 w-4" /> },
+    { key: "queue", label: "Queue Management", icon: <Users className="h-4 w-4" /> },
+    { key: "labs", label: "Lab Reports", icon: <AlertCircle className="h-4 w-4" /> },
+    { key: "admissions", label: "Admissions", icon: <Bed className="h-4 w-4" /> },
+  ],
+  pharmacy: [
+    { key: "dashboard", label: "Dashboard", icon: <LayoutDashboard className="h-4 w-4" /> },
+    { key: "prescriptions", label: "Live Prescriptions", icon: <ClipboardList className="h-4 w-4" /> },
+    { key: "inventory", label: "Inventory", icon: <Package className="h-4 w-4" /> },
+    { key: "alerts", label: "Stock Alerts", icon: <AlertCircle className="h-4 w-4" /> },
+    { key: "collection", label: "Collection/Dispensed", icon: <CheckCircle className="h-4 w-4" /> },
   ],
 }
 
@@ -67,6 +87,8 @@ export default function Page() {
       {role === "patient" && <PatientConsole section={section} onNavigate={setSection} />}
       {role === "doctor" && <DoctorCommandCenter />}
       {role === "admin" && <AdminDashboard section={section} />}
+      {role === "staff" && <StaffDashboard section={section} />}
+      {role === "pharmacy" && <PharmacyDashboard section={section} />}
     </AppShell>
   )
 }

@@ -9,6 +9,8 @@ import {
   User,
   LayoutGrid,
   Lock,
+  Users,
+  Pill as PillIcon,
 } from "lucide-react"
 import type { Role } from "@/lib/medical-data"
 import { Field, inputCls } from "./ui"
@@ -41,6 +43,20 @@ const PORTALS: {
     desc: "Bed allocation matrix, staff load & pharmacy intelligence.",
     icon: <LayoutGrid className="h-5 w-5" />,
     defaultUser: "ops.controller",
+  },
+  {
+    role: "staff",
+    title: "Staff Dashboard",
+    desc: "Patient registration, queue management & lab coordination.",
+    icon: <Users className="h-5 w-5" />,
+    defaultUser: "staff.registration",
+  },
+  {
+    role: "pharmacy",
+    title: "Pharmacy Manager",
+    desc: "Prescription fulfillment, inventory & stock management.",
+    icon: <PillIcon className="h-5 w-5" />,
+    defaultUser: "pharmacy.manager",
   },
 ]
 

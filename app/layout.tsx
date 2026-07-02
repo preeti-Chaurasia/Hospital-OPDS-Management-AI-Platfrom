@@ -13,7 +13,7 @@ export const metadata: Metadata = {
   title: 'SmartCare AI — Clinical Operations Platform',
   description:
     'Enterprise-grade healthcare operations platform: patient console, doctor command center, and admin operations dashboard.',
-  generator: 'v0.app',
+  
   icons: {
     icon: [
       {

@@ -23,6 +23,8 @@ const ROLE_META: Record<Role, { name: string; sub: string; tag: string }> = {
   patient: { name: "Priya Raman", sub: "Patient · MRN 4471-22", tag: "Patient" },
   doctor: { name: "Dr. Amelia Shaw", sub: "Internal Medicine · Bay 3", tag: "Physician" },
   admin: { name: "Operations Control", sub: "Capacity & Logistics", tag: "Admin" },
+  staff: { name: "Staff Portal", sub: "Registration & Queue", tag: "Staff" },
+  pharmacy: { name: "Pharmacy Services", sub: "Dispensing & Inventory", tag: "Pharmacy" },
 }
 
 export function AppShell({

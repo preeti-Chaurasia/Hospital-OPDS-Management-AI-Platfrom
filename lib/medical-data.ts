@@ -1,4 +1,4 @@
-export type Role = "patient" | "doctor" | "admin"
+export type Role = "patient" | "doctor" | "admin" | "staff" | "pharmacy"
 
 export type Priority = "Emergency" | "Critical" | "Stable" | "Routine"
 
@@ -220,4 +220,106 @@ export const ADMISSION_STAGES = [
   { key: "consult", label: "Physician Consult", desc: "Clinical assessment" },
   { key: "allocation", label: "Bed Allocation", desc: "Predictive room target" },
   { key: "admitted", label: "Admitted", desc: "Transfer to ward" },
+]
+
+export type LabTestStatus = "Pending" | "In Progress" | "Ready" | "Delivered"
+
+export interface LabTest {
+  id: string
+  patientName: string
+  testType: string
+  requestedBy: string
+  status: LabTestStatus
+  requestedAt: string
+}
+
+export const LAB_TESTS: LabTest[] = [
+  { id: "lab-1", patientName: "Marcus Delgado", testType: "ECG, Troponin I", requestedBy: "Dr. Shaw", status: "In Progress", requestedAt: "09:15 AM" },
+  { id: "lab-2", patientName: "Priya Raman", testType: "Chest X-Ray, CBC", requestedBy: "Dr. Shaw", status: "Ready", requestedAt: "08:42 AM" },
+  { id: "lab-3", patientName: "Edward Chen", testType: "MRI Lumbar Spine", requestedBy: "Dr. Anderson", status: "Pending", requestedAt: "09:33 AM" },
+  { id: "lab-4", patientName: "Henry Okafor", testType: "BNP, Echocardiogram", requestedBy: "Dr. Kumar", status: "Ready", requestedAt: "07:55 AM" },
+]
+
+export type PrescriptionStatus = "New" | "Being Prepared" | "Ready for Pickup" | "Dispensed"
+
+export interface Prescription {
+  id: string
+  patientName: string
+  doctorName: string
+  medicines: string[]
+  status: PrescriptionStatus
+  createdAt: string
+}
+
+export const PRESCRIPTIONS: Prescription[] = [
+  { id: "rx-1", patientName: "Sofia Marquez", doctorName: "Dr. Shaw", medicines: ["Prenatal Vitamin", "Iron Supplement"], status: "Dispensed", createdAt: "08:20 AM" },
+  { id: "rx-2", patientName: "Marcus Delgado", doctorName: "Dr. Shaw", medicines: ["Aspirin 81mg", "Atorvastatin 40mg"], status: "New", createdAt: "09:45 AM" },
+  { id: "rx-3", patientName: "Priya Raman", doctorName: "Dr. Shaw", medicines: ["Ceftriaxone 1g IV", "Albuterol inhaler"], status: "Being Prepared", createdAt: "09:10 AM" },
+  { id: "rx-4", patientName: "Lena Vogt", doctorName: "Dr. Kumar", medicines: ["Sumatriptan 50mg", "Ondansetron 4mg"], status: "Ready for Pickup", createdAt: "08:55 AM" },
+]
+
+export interface MedicineStock {
+  name: string
+  stock: number
+  reorder: number
+  lastRestocked: string
+  expiryDate: string
+  batchNumber: string
+}
+
+export const MEDICINE_INVENTORY: MedicineStock[] = [
+  { name: "Amoxicillin 500mg", stock: 0, reorder: 200, lastRestocked: "2025-06-15", expiryDate: "2026-06-15", batchNumber: "BAT20230601" },
+  { name: "Atorvastatin 40mg", stock: 84, reorder: 150, lastRestocked: "2025-06-18", expiryDate: "2026-06-18", batchNumber: "BAT20230615" },
+  { name: "Lisinopril 10mg", stock: 640, reorder: 200, lastRestocked: "2025-06-20", expiryDate: "2026-12-20", batchNumber: "BAT20230701" },
+  { name: "Ceftriaxone 1g IV", stock: 22, reorder: 60, lastRestocked: "2025-06-10", expiryDate: "2025-12-10", batchNumber: "BAT20230501" },
+  { name: "Furosemide 40mg", stock: 410, reorder: 150, lastRestocked: "2025-06-19", expiryDate: "2026-06-19", batchNumber: "BAT20230610" },
+  { name: "Albuterol Inhaler", stock: 9, reorder: 40, lastRestocked: "2025-05-20", expiryDate: "2026-05-20", batchNumber: "BAT20230420" },
+  { name: "Insulin Glargine", stock: 58, reorder: 50, lastRestocked: "2025-06-17", expiryDate: "2025-09-17", batchNumber: "BAT20230517" },
+  { name: "Morphine 10mg/mL", stock: 14, reorder: 30, lastRestocked: "2025-06-05", expiryDate: "2025-12-05", batchNumber: "BAT20230305" },
+]
+
+export interface StaffRegistration {
+  id: string
+  name: string
+  age: number
+  sex: "M" | "F"
+  complaint: string
+  phone: string
+  registeredAt: string
+}
+
+export const STAFF_REGISTRATIONS: StaffRegistration[] = [
+  { id: "sr-1", name: "Rajesh Kumar", age: 42, sex: "M", complaint: "Follow-up checkup", phone: "9876543210", registeredAt: "09:30 AM" },
+  { id: "sr-2", name: "Anita Singh", age: 28, sex: "F", complaint: "Routine vaccination", phone: "9876543211", registeredAt: "09:45 AM" },
+  { id: "sr-3", name: "Vikram Patel", age: 55, sex: "M", complaint: "Blood pressure check", phone: "9876543212", registeredAt: "10:00 AM" },
+]
+
+export interface QueueEntry {
+  id: string
+  token: string
+  patientName: string
+  registeredTime: string
+  status: "In Queue" | "In Consultation" | "Completed"
+  priority: Priority
+}
+
+export const QUEUE_ENTRIES: QueueEntry[] = [
+  { id: "qe-1", token: "A-118", patientName: "Marcus Delgado", registeredTime: "09:15 AM", status: "In Consultation", priority: "Emergency" },
+  { id: "qe-2", token: "A-119", patientName: "Priya Raman", registeredTime: "09:20 AM", status: "In Queue", priority: "Critical" },
+  { id: "qe-3", token: "A-120", patientName: "Edward Chen", registeredTime: "09:35 AM", status: "In Queue", priority: "Stable" },
+  { id: "qe-4", token: "A-121", patientName: "Sofia Marquez", registeredTime: "09:45 AM", status: "In Queue", priority: "Routine" },
+]
+
+export interface AdmissionRequest {
+  id: string
+  patientName: string
+  doctorName: string
+  bedNeeded: string
+  stage: string
+  createdAt: string
+}
+
+export const ADMISSION_REQUESTS: AdmissionRequest[] = [
+  { id: "ar-1", patientName: "Marcus Delgado", doctorName: "Dr. Shaw", bedNeeded: "ICU", stage: "Awaiting allocation", createdAt: "09:45 AM" },
+  { id: "ar-2", patientName: "Henry Okafor", doctorName: "Dr. Kumar", bedNeeded: "ICU", stage: "Allocated - ICU-02", createdAt: "08:10 AM" },
 ]
