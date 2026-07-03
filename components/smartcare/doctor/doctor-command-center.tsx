@@ -18,6 +18,7 @@ import {
   UserRound,
   Wind,
   X,
+  AlertTriangle,
 } from "lucide-react"
 import {
   INITIAL_QUEUE,
@@ -27,17 +28,42 @@ import {
   type QueuePatient,
 } from "@/lib/medical-data"
 import { Panel, PanelHeader, Badge } from "../ui"
+import { BedMatrix } from "../modules/bed-matrix"
+import { MedicineSearch } from "../modules/medicine-search"
+import { LabReports } from "../modules/lab-reports"
 import { cn } from "@/lib/utils"
 
-export function DoctorCommandCenter() {
+interface DoctorDashboardSectionProps {
+  section?: string
+}
+
+export function DoctorCommandCenter({ section = "command" }: DoctorDashboardSectionProps = {}) {
   const [queue, setQueue] = useState<QueuePatient[]>(INITIAL_QUEUE)
   const [activeId, setActiveId] = useState<string>(INITIAL_QUEUE[0].id)
   const [mobilePanel, setMobilePanel] = useState<"queue" | "file" | "notes">("file")
+  const [emergencyMode, setEmergencyMode] = useState(false)
+  
+  const toggleEmergencyMode = () => {
+    setEmergencyMode((prev) => !prev)
+    if (!emergencyMode) {
+      setQueue((q) =>
+        q.map((p) => ({
+          ...p,
+          waitMins: Math.max(0, p.waitMins + 10),
+        }))
+      )
+    }
+  }
 
   const active = useMemo(
     () => queue.find((p) => p.id === activeId) ?? queue[0],
     [queue, activeId],
   )
+  
+  // Show different views based on section - must be after all hooks
+  if (section === "beds") return <BedMatrix showAdmitButton={true} onAdmitClick={(bedId) => {}} />
+  if (section === "medicines") return <MedicineSearch />
+  if (section === "labs") return <LabReports />
 
   function callNext() {
     setQueue((q) => {
@@ -60,6 +86,24 @@ export function DoctorCommandCenter() {
 
   return (
     <div className="space-y-3">
+      {/* Emergency mode alert */}
+      {emergencyMode && (
+        <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 flex items-center gap-3">
+          <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-destructive">Emergency Mode Active</p>
+            <p className="text-xs text-destructive/80">All patients now have +10 min wait times</p>
+          </div>
+          <button
+            type="button"
+            onClick={toggleEmergencyMode}
+            className="text-xs px-3 py-1 rounded-md border border-destructive/40 text-destructive hover:bg-destructive/20 transition"
+          >
+            Disable
+          </button>
+        </div>
+      )}
+
       {/* Mobile column switcher */}
       <div className="flex gap-2 lg:hidden">
         {(["queue", "file", "notes"] as const).map((p) => (
@@ -104,6 +148,9 @@ export function DoctorCommandCenter() {
             queueLength={queue.length}
             onCallNext={callNext}
             onSkip={skip}
+            emergencyMode={emergencyMode}
+            onToggleEmergency={toggleEmergencyMode}
+            onEmergencyActivate={toggleEmergencyMode}
           />
         </div>
       </div>
@@ -325,11 +372,17 @@ function ClinicalNotes({
   queueLength,
   onCallNext,
   onSkip,
+  emergencyMode,
+  onToggleEmergency,
+  onEmergencyActivate,
 }: {
   patient?: QueuePatient
   queueLength: number
   onCallNext: () => void
   onSkip: () => void
+  emergencyMode: boolean
+  onToggleEmergency: () => void
+  onEmergencyActivate: () => void
 }) {
   const [note, setNote] = useState("")
   const [dxQuery, setDxQuery] = useState("")
@@ -532,6 +585,25 @@ function ClinicalNotes({
 
       {/* Macro action buttons */}
       <div className="space-y-2 border-t border-border p-4">
+        {/* Emergency Mode Button */}
+        <button
+          type="button"
+          onClick={() => {
+            onToggleEmergency()
+            onEmergencyActivate()
+            flash(emergencyMode ? "Emergency Mode disabled" : "Emergency Mode activated - wait times +10min")
+          }}
+          className={cn(
+            "flex w-full items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold transition",
+            emergencyMode
+              ? "bg-destructive/20 text-destructive border border-destructive/40 hover:bg-destructive/30"
+              : "bg-secondary text-foreground border border-border hover:border-destructive/50"
+          )}
+        >
+          <AlertTriangle className="h-4 w-4" />
+          {emergencyMode ? "Disable Emergency Mode" : "Activate Emergency Mode"}
+        </button>
+
         {toast ? (
           <div className="mb-1 rounded-md border border-success/30 bg-success/10 px-3 py-2 text-xs font-medium text-success">
             {toast}

@@ -16,6 +16,8 @@ import {
   AlertCircle,
   Package,
   CheckCircle,
+  FlaskConical,
+  AlertTriangle,
 } from "lucide-react"
 import type { Role } from "@/lib/medical-data"
 import { Login } from "@/components/smartcare/login"
@@ -36,6 +38,9 @@ const NAV: Record<Role, NavItem[]> = {
   ],
   doctor: [
     { key: "command", label: "Command Center", icon: <Stethoscope className="h-4 w-4" /> },
+    { key: "beds", label: "Bed Management", icon: <Bed className="h-4 w-4" /> },
+    { key: "medicines", label: "Medicine Database", icon: <Pill className="h-4 w-4" /> },
+    { key: "labs", label: "Lab Reports", icon: <FlaskConical className="h-4 w-4" /> },
   ],
   admin: [
     { key: "overview", label: "Operations Overview", icon: <BarChart3 className="h-4 w-4" /> },
@@ -56,6 +61,7 @@ const NAV: Record<Role, NavItem[]> = {
     { key: "inventory", label: "Inventory", icon: <Package className="h-4 w-4" /> },
     { key: "alerts", label: "Stock Alerts", icon: <AlertCircle className="h-4 w-4" /> },
     { key: "collection", label: "Collection/Dispensed", icon: <CheckCircle className="h-4 w-4" /> },
+    { key: "insights", label: "AI Demand Predictions", icon: <AlertTriangle className="h-4 w-4" /> },
   ],
 }
 
@@ -85,7 +91,7 @@ export default function Page() {
       onLogout={() => setRole(null)}
     >
       {role === "patient" && <PatientConsole section={section} onNavigate={setSection} />}
-      {role === "doctor" && <DoctorCommandCenter />}
+      {role === "doctor" && <DoctorCommandCenter section={section} />}
       {role === "admin" && <AdminDashboard section={section} />}
       {role === "staff" && <StaffDashboard section={section} />}
       {role === "pharmacy" && <PharmacyDashboard section={section} />}

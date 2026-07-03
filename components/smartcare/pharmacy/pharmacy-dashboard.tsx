@@ -12,7 +12,7 @@ import {
   Package,
   Calendar,
 } from "lucide-react"
-import { PRESCRIPTIONS, MEDICINE_INVENTORY, type Prescription } from "@/lib/medical-data"
+import { PRESCRIPTIONS, MEDICINE_INVENTORY, AI_MEDICINE_INSIGHTS, type Prescription } from "@/lib/medical-data"
 import { cn } from "@/lib/utils"
 
 const ACTIVITY_LOG = [
@@ -215,6 +215,7 @@ export function PharmacyDashboard({ section }: { section: string }) {
                   <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Medicine</th>
                   <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Stock</th>
                   <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Status</th>
+                  <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Rack Location</th>
                   <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Expiry</th>
                   <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Batch</th>
                 </tr>
@@ -244,6 +245,15 @@ export function PharmacyDashboard({ section }: { section: string }) {
                             {m.stock > 0 && m.stock <= m.reorder / 2 && "Low"}
                             {m.stock > m.reorder / 2 && "OK"}
                           </span>
+                        </td>
+                        <td className="px-3 py-2 text-muted-foreground">
+                          {m.rack && m.shelf && m.boxNumber ? (
+                            <span className="font-mono text-xs">
+                              {m.rack}-{m.shelf}-{m.boxNumber}
+                            </span>
+                          ) : (
+                            "-"
+                          )}
                         </td>
                         <td className="px-3 py-2 text-muted-foreground">{m.expiryDate}</td>
                         <td className="px-3 py-2 text-muted-foreground">{m.batchNumber}</td>
@@ -344,5 +354,59 @@ export function PharmacyDashboard({ section }: { section: string }) {
     )
   }
 
-  return null
+  if (section === "dashboard") {
+    return (
+      <div className="space-y-4">
+        {/* Existing KPI section omitted - shown above */}
+      </div>
+    )
+  }
+
+  // AI Insights View
+  return (
+    <div className="space-y-4">
+      <div className="rounded-lg border border-border bg-card p-4">
+        <h3 className="text-sm font-semibold text-foreground">AI Medicine Demand Predictions</h3>
+        <p className="mt-1 text-xs text-muted-foreground">Powered by seasonal patterns & weather trends</p>
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {AI_MEDICINE_INSIGHTS.map((insight, idx) => (
+            <div
+              key={idx}
+              className={cn(
+                "rounded-lg border p-3",
+                insight.priority === "high"
+                  ? "border-destructive/30 bg-destructive/5"
+                  : insight.priority === "medium"
+                    ? "border-warning/30 bg-warning/5"
+                    : "border-primary/30 bg-primary/5"
+              )}
+            >
+              <div className="flex items-start gap-3">
+                <div className="shrink-0">
+                  {insight.priority === "high" && (
+                    <AlertTriangle className="h-5 w-5 text-destructive" />
+                  )}
+                  {insight.priority === "medium" && (
+                    <AlertCircle className="h-5 w-5 text-warning" />
+                  )}
+                  {insight.priority === "low" && (
+                    <Pill className="h-5 w-5 text-primary" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-foreground">{insight.title}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{insight.description}</p>
+                  <div className="mt-2 rounded-md bg-secondary/30 px-2 py-1.5">
+                    <p className="text-xs font-medium text-foreground">
+                      💡 {insight.recommendation}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
 }

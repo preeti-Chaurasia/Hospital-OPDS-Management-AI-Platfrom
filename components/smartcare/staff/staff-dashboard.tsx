@@ -19,7 +19,9 @@ import {
   LAB_TESTS,
   ADMISSION_REQUESTS,
   PRIORITY_STYLES,
+  getVitalsRecommendations,
   type LabTest,
+  type PatientVitals,
 } from "@/lib/medical-data"
 import { cn } from "@/lib/utils"
 
@@ -36,6 +38,8 @@ export function StaffDashboard({ section }: { section: string }) {
   const [labTests, setLabTests] = useState(LAB_TESTS)
   const [admissions, setAdmissions] = useState(ADMISSION_REQUESTS)
   const [searchQ, setSearchQ] = useState("")
+  const [expandedLabTest, setExpandedLabTest] = useState<string | null>(null)
+  const [labRemarks, setLabRemarks] = useState<Record<string, string>>({})
   const [newPatientForm, setNewPatientForm] = useState({
     name: "",
     age: "",
@@ -43,6 +47,15 @@ export function StaffDashboard({ section }: { section: string }) {
     complaint: "",
     phone: "",
   })
+  const [vitalsForm, setVitalsForm] = useState<PatientVitals>({
+    bp: "",
+    pulse: 0,
+    temp: 0,
+    spo2: 0,
+    height: 0,
+    weight: 0,
+  })
+  const [recommendedVitals, setRecommendedVitals] = useState<string[]>([])
 
   const handleRegisterPatient = () => {
     if (newPatientForm.name && newPatientForm.age && newPatientForm.complaint) {
@@ -58,9 +71,24 @@ export function StaffDashboard({ section }: { section: string }) {
           minute: "2-digit",
           hour12: true,
         }),
+        vitals: vitalsForm.bp && vitalsForm.pulse > 0 ? vitalsForm : undefined,
       }
       setRegistrations([newReg, ...registrations])
       setNewPatientForm({ name: "", age: "", sex: "M", complaint: "", phone: "" })
+      setVitalsForm({ bp: "", pulse: 0, temp: 0, spo2: 0, height: 0, weight: 0 })
+      setRecommendedVitals([])
+    }
+  }
+  
+  const handleComplaintChange = (complaint: string) => {
+    setNewPatientForm({ ...newPatientForm, complaint })
+    if (newPatientForm.age) {
+      const recommendations = getVitalsRecommendations(
+        parseInt(newPatientForm.age),
+        newPatientForm.sex,
+        complaint
+      )
+      setRecommendedVitals(recommendations)
     }
   }
 
@@ -179,11 +207,74 @@ export function StaffDashboard({ section }: { section: string }) {
               type="text"
               placeholder="Chief Complaint"
               value={newPatientForm.complaint}
-              onChange={(e) =>
-                setNewPatientForm({ ...newPatientForm, complaint: e.target.value })
-              }
+              onChange={(e) => handleComplaintChange(e.target.value)}
               className="col-span-1 rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground placeholder-muted-foreground focus:border-primary focus:outline-none sm:col-span-2"
             />
+            
+            {/* Vitals Section */}
+            <div className="col-span-1 rounded-lg border border-border bg-secondary/20 p-3 sm:col-span-2">
+              <p className="mb-3 text-xs font-semibold text-foreground">Patient Vitals</p>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <input
+                  type="text"
+                  placeholder="BP (e.g., 120/80)"
+                  value={vitalsForm.bp}
+                  onChange={(e) => setVitalsForm({ ...vitalsForm, bp: e.target.value })}
+                  className="rounded-md border border-border bg-secondary px-2 py-1.5 text-xs text-foreground placeholder-muted-foreground focus:border-primary focus:outline-none"
+                />
+                <input
+                  type="number"
+                  placeholder="Pulse (bpm)"
+                  value={vitalsForm.pulse || ""}
+                  onChange={(e) => setVitalsForm({ ...vitalsForm, pulse: parseInt(e.target.value) || 0 })}
+                  className="rounded-md border border-border bg-secondary px-2 py-1.5 text-xs text-foreground placeholder-muted-foreground focus:border-primary focus:outline-none"
+                />
+                <input
+                  type="number"
+                  step="0.1"
+                  placeholder="Temp (°C)"
+                  value={vitalsForm.temp || ""}
+                  onChange={(e) => setVitalsForm({ ...vitalsForm, temp: parseFloat(e.target.value) || 0 })}
+                  className="rounded-md border border-border bg-secondary px-2 py-1.5 text-xs text-foreground placeholder-muted-foreground focus:border-primary focus:outline-none"
+                />
+                <input
+                  type="number"
+                  placeholder="SpO₂ (%)"
+                  value={vitalsForm.spo2 || ""}
+                  onChange={(e) => setVitalsForm({ ...vitalsForm, spo2: parseInt(e.target.value) || 0 })}
+                  className="rounded-md border border-border bg-secondary px-2 py-1.5 text-xs text-foreground placeholder-muted-foreground focus:border-primary focus:outline-none"
+                />
+                <input
+                  type="number"
+                  placeholder="Height (cm)"
+                  value={vitalsForm.height || ""}
+                  onChange={(e) => setVitalsForm({ ...vitalsForm, height: parseInt(e.target.value) || 0 })}
+                  className="rounded-md border border-border bg-secondary px-2 py-1.5 text-xs text-foreground placeholder-muted-foreground focus:border-primary focus:outline-none"
+                />
+                <input
+                  type="number"
+                  placeholder="Weight (kg)"
+                  value={vitalsForm.weight || ""}
+                  onChange={(e) => setVitalsForm({ ...vitalsForm, weight: parseInt(e.target.value) || 0 })}
+                  className="rounded-md border border-border bg-secondary px-2 py-1.5 text-xs text-foreground placeholder-muted-foreground focus:border-primary focus:outline-none"
+                />
+              </div>
+            </div>
+
+            {/* AI Vitals Recommendations */}
+            {recommendedVitals.length > 0 && (
+              <div className="col-span-1 rounded-lg border border-primary/30 bg-primary/5 p-3 sm:col-span-2">
+                <p className="mb-2 text-xs font-semibold text-primary">AI Vitals Recommendations</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {recommendedVitals.map((vital) => (
+                    <span key={vital} className="rounded-sm bg-primary/20 px-2 py-1 text-xs font-medium text-primary">
+                      {vital}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            
             <button
               onClick={handleRegisterPatient}
               className="col-span-1 inline-flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90 sm:col-span-2"
@@ -300,47 +391,89 @@ export function StaffDashboard({ section }: { section: string }) {
     return (
       <div className="space-y-4">
         <div className="rounded-lg border border-border bg-card p-4">
-          <h3 className="text-sm font-semibold text-foreground">Pending Lab Tests</h3>
+          <h3 className="text-sm font-semibold text-foreground">Lab Test Management</h3>
           <div className="mt-3 space-y-2">
             {labTests.map((t) => (
-              <div
-                key={t.id}
-                className="flex flex-col gap-2 rounded-lg border border-border bg-secondary/30 p-3 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="min-w-0">
-                  <p className="font-medium text-foreground">{t.patientName}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {t.testType} · Req by {t.requestedBy}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {t.status === "Ready" && (
-                    <span className="flex items-center gap-1 text-xs font-semibold text-success">
-                      <CheckCircle className="h-3 w-3" />
-                      Ready
-                    </span>
-                  )}
-                  {t.status === "Pending" && (
-                    <span className="flex items-center gap-1 text-xs font-semibold text-muted-foreground">
-                      <Clock className="h-3 w-3" />
-                      Pending
-                    </span>
-                  )}
-                  {t.status === "In Progress" && (
-                    <span className="flex items-center gap-1 text-xs font-semibold text-primary">
-                      <AlertCircle className="h-3 w-3" />
-                      In Progress
-                    </span>
-                  )}
-                  {t.status !== "Ready" && (
+              <div key={t.id} className="rounded-lg border border-border bg-secondary/30 p-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="font-medium text-foreground">{t.patientName}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {t.testType} · Req by {t.requestedBy}
+                    </p>
+                    {t.reportFile && (
+                      <p className="text-xs text-success">📎 {t.reportFile}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {t.status === "Ready" && (
+                      <span className="flex items-center gap-1 text-xs font-semibold text-success">
+                        <CheckCircle className="h-3 w-3" />
+                        Ready
+                      </span>
+                    )}
+                    {t.status === "Pending" && (
+                      <span className="flex items-center gap-1 text-xs font-semibold text-muted-foreground">
+                        <Clock className="h-3 w-3" />
+                        Pending
+                      </span>
+                    )}
+                    {t.status === "In Progress" && (
+                      <span className="flex items-center gap-1 text-xs font-semibold text-primary">
+                        <AlertCircle className="h-3 w-3" />
+                        In Progress
+                      </span>
+                    )}
                     <button
-                      onClick={() => handleLabReportReady(t.id)}
+                      onClick={() => setExpandedLabTest(expandedLabTest === t.id ? null : t.id)}
                       className="rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/20"
                     >
-                      <Download className="h-3 w-3" />
+                      {expandedLabTest === t.id ? "Close" : "Edit"}
                     </button>
-                  )}
+                  </div>
                 </div>
+
+                {/* Expanded Lab Test Form */}
+                {expandedLabTest === t.id && (
+                  <div className="mt-3 space-y-2 border-t border-border pt-3">
+                    <div>
+                      <label className="text-xs font-semibold text-foreground">Upload Report (PDF/Image)</label>
+                      <input
+                        type="text"
+                        placeholder="e.g., xray_2025_06_03.pdf"
+                        defaultValue={t.reportFile || ""}
+                        onChange={(e) => {
+                          setLabTests(
+                            labTests.map((lab) =>
+                              lab.id === t.id
+                                ? { ...lab, reportFile: e.target.value, uploadedAt: new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }) }
+                                : lab
+                            )
+                          )
+                        }}
+                        className="mt-1 w-full rounded-md border border-border bg-secondary px-2 py-1.5 text-xs text-foreground placeholder-muted-foreground focus:border-primary focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-foreground">Add Remarks</label>
+                      <textarea
+                        placeholder="Clinical notes or observations..."
+                        value={labRemarks[t.id] || ""}
+                        onChange={(e) => setLabRemarks({ ...labRemarks, [t.id]: e.target.value })}
+                        className="mt-1 h-16 w-full rounded-md border border-border bg-secondary px-2 py-1.5 text-xs text-foreground placeholder-muted-foreground focus:border-primary focus:outline-none resize-none"
+                      />
+                    </div>
+                    <button
+                      onClick={() => {
+                        handleLabReportReady(t.id)
+                        setExpandedLabTest(null)
+                      }}
+                      className="w-full rounded-md bg-success/10 px-2 py-1.5 text-xs font-medium text-success hover:bg-success/20"
+                    >
+                      Mark as Ready & Save
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>

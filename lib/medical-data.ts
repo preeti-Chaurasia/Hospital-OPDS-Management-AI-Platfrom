@@ -231,6 +231,9 @@ export interface LabTest {
   requestedBy: string
   status: LabTestStatus
   requestedAt: string
+  reportFile?: string
+  remarks?: string
+  uploadedAt?: string
 }
 
 export const LAB_TESTS: LabTest[] = [
@@ -265,18 +268,30 @@ export interface MedicineStock {
   lastRestocked: string
   expiryDate: string
   batchNumber: string
+  rack?: string
+  shelf?: number
+  boxNumber?: number
 }
 
 export const MEDICINE_INVENTORY: MedicineStock[] = [
-  { name: "Amoxicillin 500mg", stock: 0, reorder: 200, lastRestocked: "2025-06-15", expiryDate: "2026-06-15", batchNumber: "BAT20230601" },
-  { name: "Atorvastatin 40mg", stock: 84, reorder: 150, lastRestocked: "2025-06-18", expiryDate: "2026-06-18", batchNumber: "BAT20230615" },
-  { name: "Lisinopril 10mg", stock: 640, reorder: 200, lastRestocked: "2025-06-20", expiryDate: "2026-12-20", batchNumber: "BAT20230701" },
-  { name: "Ceftriaxone 1g IV", stock: 22, reorder: 60, lastRestocked: "2025-06-10", expiryDate: "2025-12-10", batchNumber: "BAT20230501" },
-  { name: "Furosemide 40mg", stock: 410, reorder: 150, lastRestocked: "2025-06-19", expiryDate: "2026-06-19", batchNumber: "BAT20230610" },
-  { name: "Albuterol Inhaler", stock: 9, reorder: 40, lastRestocked: "2025-05-20", expiryDate: "2026-05-20", batchNumber: "BAT20230420" },
-  { name: "Insulin Glargine", stock: 58, reorder: 50, lastRestocked: "2025-06-17", expiryDate: "2025-09-17", batchNumber: "BAT20230517" },
-  { name: "Morphine 10mg/mL", stock: 14, reorder: 30, lastRestocked: "2025-06-05", expiryDate: "2025-12-05", batchNumber: "BAT20230305" },
+  { name: "Amoxicillin 500mg", stock: 0, reorder: 200, lastRestocked: "2025-06-15", expiryDate: "2026-06-15", batchNumber: "BAT20230601", rack: "A", shelf: 1, boxNumber: 5 },
+  { name: "Atorvastatin 40mg", stock: 84, reorder: 150, lastRestocked: "2025-06-18", expiryDate: "2026-06-18", batchNumber: "BAT20230615", rack: "A", shelf: 2, boxNumber: 8 },
+  { name: "Lisinopril 10mg", stock: 640, reorder: 200, lastRestocked: "2025-06-20", expiryDate: "2026-12-20", batchNumber: "BAT20230701", rack: "B", shelf: 1, boxNumber: 12 },
+  { name: "Ceftriaxone 1g IV", stock: 22, reorder: 60, lastRestocked: "2025-06-10", expiryDate: "2025-12-10", batchNumber: "BAT20230501", rack: "C", shelf: 3, boxNumber: 2 },
+  { name: "Furosemide 40mg", stock: 410, reorder: 150, lastRestocked: "2025-06-19", expiryDate: "2026-06-19", batchNumber: "BAT20230610", rack: "B", shelf: 2, boxNumber: 6 },
+  { name: "Albuterol Inhaler", stock: 9, reorder: 40, lastRestocked: "2025-05-20", expiryDate: "2026-05-20", batchNumber: "BAT20230420", rack: "C", shelf: 1, boxNumber: 3 },
+  { name: "Insulin Glargine", stock: 58, reorder: 50, lastRestocked: "2025-06-17", expiryDate: "2025-09-17", batchNumber: "BAT20230517", rack: "D", shelf: 2, boxNumber: 4 },
+  { name: "Morphine 10mg/mL", stock: 14, reorder: 30, lastRestocked: "2025-06-05", expiryDate: "2025-12-05", batchNumber: "BAT20230305", rack: "D", shelf: 3, boxNumber: 1 },
 ]
+
+export interface PatientVitals {
+  bp: string
+  pulse: number
+  temp: number
+  spo2: number
+  height: number
+  weight: number
+}
 
 export interface StaffRegistration {
   id: string
@@ -286,6 +301,7 @@ export interface StaffRegistration {
   complaint: string
   phone: string
   registeredAt: string
+  vitals?: PatientVitals
 }
 
 export const STAFF_REGISTRATIONS: StaffRegistration[] = [
@@ -322,4 +338,62 @@ export interface AdmissionRequest {
 export const ADMISSION_REQUESTS: AdmissionRequest[] = [
   { id: "ar-1", patientName: "Marcus Delgado", doctorName: "Dr. Shaw", bedNeeded: "ICU", stage: "Awaiting allocation", createdAt: "09:45 AM" },
   { id: "ar-2", patientName: "Henry Okafor", doctorName: "Dr. Kumar", bedNeeded: "ICU", stage: "Allocated - ICU-02", createdAt: "08:10 AM" },
+]
+
+export function getVitalsRecommendations(age: number, sex: "M" | "F", complaint: string): string[] {
+  const recommendations: string[] = []
+  
+  if (age > 60) {
+    recommendations.push("Blood Pressure", "Blood Sugar", "ECG")
+  } else if (age < 12) {
+    recommendations.push("Weight", "Temperature", "Growth metrics")
+  }
+  
+  if (sex === "F" && (complaint.toLowerCase().includes("pregnant") || complaint.toLowerCase().includes("prenatal"))) {
+    recommendations.push("Blood Pressure", "Hemoglobin", "Blood Sugar")
+  }
+  
+  if (complaint.toLowerCase().includes("fever") || complaint.toLowerCase().includes("cough")) {
+    recommendations.push("Temperature", "Pulse", "Oxygen Saturation")
+  }
+  
+  if (complaint.toLowerCase().includes("chest") || complaint.toLowerCase().includes("heart")) {
+    recommendations.push("Blood Pressure", "ECG", "Heart Rate")
+  }
+  
+  return recommendations.length > 0 ? recommendations : ["Blood Pressure", "Temperature", "Pulse", "Oxygen Saturation"]
+}
+
+export interface AIMedicineInsight {
+  title: string
+  description: string
+  recommendation: string
+  priority: "high" | "medium" | "low"
+}
+
+export const AI_MEDICINE_INSIGHTS: AIMedicineInsight[] = [
+  {
+    title: "High Fever Cases Expected",
+    description: "Current weather patterns indicate increased respiratory infections",
+    recommendation: "Increase Paracetamol & Ibuprofen stock by 20%",
+    priority: "high"
+  },
+  {
+    title: "High Dengue Risk Detected",
+    description: "Seasonal patterns and local disease surveillance data",
+    recommendation: "Increase ORS inventory & platelet transfusion units",
+    priority: "high"
+  },
+  {
+    title: "Flu Season Alert",
+    description: "Predictive modeling for coming weeks",
+    recommendation: "Increase cough syrup, antiviral, and vaccine supplies",
+    priority: "medium"
+  },
+  {
+    title: "Low Stock Alert",
+    description: "Amoxicillin 500mg currently out of stock",
+    recommendation: "Emergency reorder required - affects antibiotic availability",
+    priority: "high"
+  },
 ]
