@@ -18,6 +18,8 @@ import {
   CheckCircle,
   FlaskConical,
   AlertTriangle,
+  TrendingDown,
+  FileText // Clean representation for Pathology laboratory requests
 } from "lucide-react"
 import type { Role } from "@/lib/medical-data"
 import { Login } from "@/components/smartcare/login"
@@ -48,20 +50,42 @@ const NAV: Record<Role, NavItem[]> = {
     { key: "pharmacy", label: "Pharmacy Inventory", icon: <Pill className="h-4 w-4" /> },
     { key: "reports", label: "Clinical Reports", icon: <ClipboardList className="h-4 w-4" /> },
   ],
+  /* =========================================================================
+     STREAMLINED STAFF WORKSPACE (RECEPTIONIST + LAB TECHNICIAN)
+     ========================================================================= */
   staff: [
-    { key: "dashboard", label: "Dashboard", icon: <LayoutDashboard className="h-4 w-4" /> },
-    { key: "registration", label: "Patient Registration", icon: <UserPlus className="h-4 w-4" /> },
-    { key: "queue", label: "Queue Management", icon: <Users className="h-4 w-4" /> },
-    { key: "labs", label: "Lab Reports", icon: <AlertCircle className="h-4 w-4" /> },
-    { key: "admissions", label: "Admissions", icon: <Bed className="h-4 w-4" /> },
+    { 
+      key: "dashboard", 
+      label: "Dashboard", 
+      icon: <LayoutDashboard className="h-4 w-4" /> 
+    },
+    { 
+      key: "registration", 
+      label: "Patient Registration", 
+      icon: <UserPlus className="h-4 w-4" /> 
+    },
+    { 
+      key: "labs", 
+      label: "Lab Reports", 
+      icon: <FileText className="h-4 w-4" /> 
+    },
   ],
   pharmacy: [
-    { key: "dashboard", label: "Dashboard", icon: <LayoutDashboard className="h-4 w-4" /> },
-    { key: "prescriptions", label: "Live Prescriptions", icon: <ClipboardList className="h-4 w-4" /> },
-    { key: "inventory", label: "Inventory", icon: <Package className="h-4 w-4" /> },
-    { key: "alerts", label: "Stock Alerts", icon: <AlertCircle className="h-4 w-4" /> },
-    { key: "collection", label: "Collection/Dispensed", icon: <CheckCircle className="h-4 w-4" /> },
-    { key: "insights", label: "AI Demand Predictions", icon: <AlertTriangle className="h-4 w-4" /> },
+    { 
+      key: "dashboard", 
+      label: "Dashboard", 
+      icon: <LayoutDashboard className="h-4 w-4" /> 
+    },
+    { 
+      key: "inventory", 
+      label: "Smart Inventory & Alerts", 
+      icon: <Pill className="h-4 w-4" /> 
+    },
+    { 
+      key: "predictions", 
+      label: "AI Demand Predictions", 
+      icon: <TrendingDown className="h-4 w-4" /> 
+    },
   ],
 }
 

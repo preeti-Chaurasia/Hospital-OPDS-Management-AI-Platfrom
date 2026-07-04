@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
+import React from "react"
 import {
   AlarmClock,
   CheckCircle2,
@@ -16,7 +17,14 @@ import {
   Activity,
   Bot,
   ScanLine,
+  Pill,      // Added for Pharmacy Orders
+  FileText,  // Added for Lab Reports
+  Heart,     // Added for BP
+  Thermometer, // Added for Temperature
+  Droplet,   // Added for SpO2
+  Wind       // Added for Respiration
 } from "lucide-react"
+
 import { Panel, PanelHeader, Badge, Stat, Field, inputCls } from "../ui"
 import { ADMISSION_STAGES } from "@/lib/medical-data"
 import { cn } from "@/lib/utils"
@@ -160,70 +168,164 @@ function PatientDashboard({
   const ahead = Math.max(0, myNumber - nowServing)
   const delay = ahead * 6
 
+  // Dummy Data for Previewing UI Connectivity
+  const dummyMedicines = [
+    { name: "Amoxicillin 500mg", dosage: "1-0-1 (After Food)", duration: "5 Days", status: "Ready for Pickup" },
+    { name: "Paracetamol 650mg", dosage: "SOS (When Needed)", duration: "3 Days", status: "Preparing" }
+  ]
+
+  const dummyLabReports = [
+    { testName: "Complete Blood Count (CBC)", orderedBy: "Dr. Amelia Shaw", status: "In-Progress" },
+    { testName: "Chest X-Ray", orderedBy: "Dr. Amelia Shaw", status: "Pending Upload" }
+  ]
+
+  const dummyVitals = {
+    bp: "120/80 mmHg",
+    heartRate: "72 bpm",
+    temp: "98.6 °F",
+    spo2: "98%",
+    respiratoryRate: "18 /min"
+  }
+
   return (
     <div className="space-y-5">
+      {/* Upper 4 Boxes kept completely identical as your screen setup */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Stat label="Now Serving" value={`A-${nowServing}`} sub="Counter 02 · Internal Medicine" icon={<Ticket className="h-4 w-4" />} />
         <Stat label="Your Token" value={token ?? "—"} sub={token ? `${ahead} patients ahead` : "Not yet generated"} icon={<Ticket className="h-4 w-4" />} tone="success" />
         <Stat label="Est. Wait" value={`${delay}m`} sub="Recalculated live every 30s" icon={<Clock className="h-4 w-4" />} tone="warning" />
-        <Stat label="Triage Status" value={stage >= 1 ? "Queued" : "Pending"} sub={`Stage ${stage + 1} of ${ADMISSION_STAGES.length}`} icon={<Activity className="h-4 w-4" />} />
+        <Stat label="Triage Status" value={stage >= 1 ? "Queued" : "Pending"} sub={`Stage ${stage + 1} of 5`} icon={<Activity className="h-4 w-4" />} />
       </div>
 
+      {/* Main Content Layout Grid */}
       <div className="grid gap-5 lg:grid-cols-3">
-        <Panel className="lg:col-span-2">
-          <PanelHeader
-            title="Today's Tasks"
-            subtitle="High-visibility action items for your visit"
-            icon={<CheckCircle2 className="h-4 w-4" />}
-          />
-          <div className="divide-y divide-border">
-            {[
-              { t: "Generate your visit token", done: !!token, cta: "register" },
-              { t: "Complete QR pre-arrival check-in", done: false, cta: "checkin" },
-              { t: "Confirm symptoms with AI receptionist", done: false, cta: "receptionist" },
-              { t: "Review admission pipeline status", done: stage > 1, cta: "admission" },
-            ].map((task) => (
-              <TaskRow key={task.t} {...task} onNavigate={onNavigate} />
-            ))}
-          </div>
-        </Panel>
+        
+        {/* Left Section: Core Doctor Orders (Medicines & Lab Tests) */}
+        <div className="lg:col-span-2 space-y-5">
+          
+          {/* 1. Prescribed Medicines Panel */}
+          <Panel>
+            <PanelHeader
+              title="Prescribed Medications"
+              subtitle="Live sync with pharmacy fulfillment counter"
+              icon={<Pill className="h-4 w-4" />}
+            />
+            <div className="p-4 space-y-3">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-muted-foreground font-medium">
+                      <th className="pb-2">Medication</th>
+                      <th className="pb-2">Dosage</th>
+                      <th className="pb-2">Duration</th>
+                      <th className="pb-2 text-right">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {dummyMedicines.map((med, idx) => (
+                      <tr key={idx} className="text-foreground">
+                        <td className="py-3 font-medium">{med.name}</td>
+                        <td className="py-3 text-muted-foreground">{med.dosage}</td>
+                        <td className="py-3 text-muted-foreground">{med.duration}</td>
+                        <td className="py-3 text-right">
+                          <span className={cn(
+                            "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium border",
+                            med.status === "Ready for Pickup" ? "bg-success/10 text-success border-success/20" : "bg-warning/10 text-warning border-warning/20"
+                          )}>
+                            {med.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </Panel>
 
+          {/* 2. Lab Reports / Diagnostics Panel */}
+          <Panel>
+            <PanelHeader
+              title="Requested Diagnostic Lab Reports"
+              subtitle="Reports automatically routing to buffer slot on upload"
+              icon={<FileText className="h-4 w-4" />}
+            />
+            <div className="p-4 space-y-3">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-muted-foreground font-medium">
+                      <th className="pb-2">Test Name</th>
+                      <th className="pb-2">Ordered By</th>
+                      <th className="pb-2 text-right">Lab Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {dummyLabReports.map((report, idx) => (
+                      <tr key={idx} className="text-foreground">
+                        <td className="py-3 font-medium">{report.testName}</td>
+                        <td className="py-3 text-muted-foreground">{report.orderedBy}</td>
+                        <td className="py-3 text-right">
+                          <span className="inline-flex items-center rounded-full bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 text-xs font-medium">
+                            {report.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </Panel>
+        </div>
+
+        {/* Right Section: Transformed Nurse Vitals Check Panel */}
         <Panel>
-          <PanelHeader title="Visit Snapshot" icon={<Activity className="h-4 w-4" />} />
-          <div className="space-y-3 p-4 text-sm">
-            <Row k="Department" v="Internal Medicine" />
-            <Row k="Provider" v="Dr. Amelia Shaw" />
-            <Row k="Appointment" v="Today · 2:40 PM" />
-            <Row k="Room Target" v={<Badge className="bg-primary/10 text-primary border-primary/25">GEN-08 (predicted)</Badge>} />
-            <Row k="Pre-arrival window" v="30 min before slot" />
+          <PanelHeader title="Nurse Pre-Check Vitals" icon={<Activity className="h-4 w-4" />} />
+          <div className="space-y-4 p-4 text-sm">
+            <div className="p-3 rounded-lg border border-border bg-accent/30 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Heart className="h-4 w-4 text-destructive" />
+                <span>Blood Pressure</span>
+              </div>
+              <span className="font-semibold text-foreground">{dummyVitals.bp}</span>
+            </div>
+
+            <div className="p-3 rounded-lg border border-border bg-accent/30 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Activity className="h-4 w-4 text-primary" />
+                <span>Pulse (Heart Rate)</span>
+              </div>
+              <span className="font-semibold text-foreground">{dummyVitals.heartRate}</span>
+            </div>
+
+            <div className="p-3 rounded-lg border border-border bg-accent/30 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <UserPlus className="h-4 w-4 text-warning" />
+                <span>Temperature</span>
+              </div>
+              <span className="font-semibold text-foreground">{dummyVitals.temp}</span>
+            </div>
+
+            <div className="p-3 rounded-lg border border-border bg-accent/30 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Activity className="h-4 w-4 text-info" />
+                <span>Oxygen (SpO2)</span>
+              </div>
+              <span className="font-semibold text-foreground">{dummyVitals.spo2}</span>
+            </div>
+
+            <div className="p-3 rounded-lg border border-border bg-accent/30 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <TimerReset className="h-4 w-4 text-success" />
+                <span>Respiration Rate</span>
+              </div>
+              <span className="font-semibold text-foreground">{dummyVitals.respiratoryRate}</span>
+            </div>
           </div>
         </Panel>
-      </div>
-    </div>
-  )
-}
 
-function TaskRow({ t, done, cta, onNavigate }: { t: string; done: boolean; cta: string; onNavigate: (k: string) => void }) {
-  return (
-    <div className="flex items-center justify-between gap-3 px-4 py-3">
-      <div className="flex items-center gap-3">
-        <span className={cn("flex h-5 w-5 items-center justify-center rounded-full border", done ? "border-success bg-success text-white" : "border-border text-transparent")}>
-          <CheckCircle2 className="h-4 w-4" />
-        </span>
-        <span className={cn("text-sm", done ? "text-muted-foreground line-through" : "text-foreground")}>{t}</span>
       </div>
-      <button type="button" onClick={() => onNavigate(cta)} className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-primary hover:bg-accent">
-        {done ? "View" : "Start"}
-      </button>
-    </div>
-  )
-}
-
-function Row({ k, v }: { k: string; v: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="text-muted-foreground">{k}</span>
-      <span className="font-medium text-foreground">{v}</span>
     </div>
   )
 }
@@ -533,11 +635,32 @@ function Passport({ k, v }: { k: string; v: string }) {
 }
 
 /* =========================================================================
-   SUB-COMPONENT 4: QR Check-In
+   UPDATED COMPONENT: QR Check-In Connected with Live Patient Line
    ========================================================================= */
-function QrCheckIn({ token }: { token: string | null }) {
+function QrCheckIn({ 
+  token,
+  queue = [] // Connect your mock global queue array state here
+}: { 
+  token: string | null 
+  queue?: any[]
+}) {
   const [scanning, setScanning] = useState(false)
   const [scanned, setScanned] = useState(false)
+
+  // Dummy Fallback Queue Line data inside component just to showcase visual lookup
+  const mockQueue = queue.length > 0 ? queue : [
+    { id: "1", token: "A-118", name: "Marcus Delgado", age: 54, sex: "M", complaint: "Acute chest pain...", priority: "emergency", waitMins: 2 },
+    { id: "2", token: "A-119", name: "Priya Raman", age: 33, sex: "F", complaint: "High-grade fever...", priority: "critical", waitMins: 9 },
+    { id: "3", token: "A-120", name: "Edward Chen", age: 41, sex: "M", complaint: "Lower back pain...", priority: "stable", waitMins: 18 }
+  ]
+
+  // Priority layout tags mapper matching doctor configuration elements
+  const PRIORITY_STYLES: Record<string, { cls: string; label: string; dot: string }> = {
+    emergency: { cls: "bg-destructive/10 text-destructive border-destructive/20", label: "Emergency", dot: "bg-destructive" },
+    critical: { cls: "bg-warning/10 text-warning border-warning/20", label: "Critical", dot: "bg-warning" },
+    stable: { cls: "bg-success/10 text-success border-success/20", label: "Stable", dot: "bg-success" },
+    routine: { cls: "bg-primary/10 text-primary border-primary/20", label: "Routine", dot: "bg-primary" }
+  }
 
   function startScan() {
     setScanning(true)
@@ -549,8 +672,11 @@ function QrCheckIn({ token }: { token: string | null }) {
   }
 
   return (
+    // Grid stretched across 3 full responsive columns for visual balancing
     <div className="grid gap-5 lg:grid-cols-3">
-      <Panel className="lg:col-span-2">
+      
+      {/* COLUMN 1: QR Scanner Core Simulator Wrapper */}
+      <Panel>
         <PanelHeader title="QR Pre-Arrival Check-In" subtitle="Contactless kiosk scanner simulator" icon={<QrCode className="h-4 w-4" />} />
         <div className="flex flex-col items-center justify-center p-6">
           <div className="relative flex h-64 w-64 items-center justify-center overflow-hidden rounded-xl border-2 border-primary/30 bg-sidebar">
@@ -560,7 +686,7 @@ function QrCheckIn({ token }: { token: string | null }) {
             <span className="absolute bottom-3 right-3 h-7 w-7 border-b-2 border-r-2 border-sidebar-primary" />
 
             {scanned ? (
-              <div className="text-center text-sidebar-foreground">
+              <div className="text-center text-sidebar-foreground animate-fade-in">
                 <CheckCircle2 className="mx-auto h-14 w-14 text-success" />
                 <p className="mt-2 text-sm font-semibold">Check-in confirmed</p>
                 <p className="text-xs text-sidebar-foreground/60">{token ?? "A-121"} verified</p>
@@ -575,13 +701,14 @@ function QrCheckIn({ token }: { token: string | null }) {
             )}
           </div>
 
-          <button type="button" onClick={startScan} disabled={scanning} className="mt-5 inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60">
+          <button type="button" onClick={startScan} disabled={scanning} className="mt-5 inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60 w-full justify-center">
             <ScanLine className="h-4 w-4" /> {scanning ? "Scanning…" : scanned ? "Scan again" : "Start scan"}
           </button>
           <style>{`@keyframes scanline {0%{top:0.75rem}50%{top:14rem}100%{top:0.75rem}}`}</style>
         </div>
       </Panel>
 
+      {/* COLUMN 2: Rules & Control Target Alert Windows Block */}
       <div className="space-y-5">
         <Panel>
           <PanelHeader title="Arrival Window" icon={<AlarmClock className="h-4 w-4" />} />
@@ -604,12 +731,59 @@ function QrCheckIn({ token }: { token: string | null }) {
           </div>
         </Panel>
       </div>
+
+      {/* COLUMN 3: Dynamic Read-Only Live Queue Line View Linked from Doctor Module */}
+      <Panel className="flex flex-col h-full max-h-[440px]">
+        <PanelHeader
+          title="Live Active Patient Line"
+          subtitle={`${mockQueue.length} cases processing currently`}
+          icon={<Activity className="h-4 w-4" />}
+        />
+        <div className="flex-1 divide-y divide-border overflow-y-auto bg-card">
+          {mockQueue.map((p, i) => {
+            const ps = PRIORITY_STYLES[p.priority] || PRIORITY_STYLES.stable
+            return (
+              <div
+                key={p.id}
+                className="flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-muted/20"
+              >
+                <div className="flex flex-col items-center shrink-0">
+                  <span className="font-mono text-sm font-bold text-primary">{p.token}</span>
+                  {i === 0 ? (
+                    <span className="mt-0.5 text-[9px] font-bold uppercase text-success tracking-wide animate-pulse">
+                      In Cabin
+                    </span>
+                  ) : i === 1 ? (
+                    <span className="mt-0.5 text-[9px] font-medium uppercase text-warning tracking-wide">
+                      Up Next
+                    </span>
+                  ) : null}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="truncate text-sm font-semibold text-foreground">{p.name}</p>
+                    <span className={cn("h-2 w-2 shrink-0 rounded-full", ps.dot)} />
+                  </div>
+                  <p className="truncate text-xs text-muted-foreground mt-0.5">
+                    {p.age}{p.sex} · {p.complaint}
+                  </p>
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <Badge className={cn("text-[10px] px-2 py-0.5 font-semibold border", ps.cls)}>{ps.label}</Badge>
+                    <span className="text-[11px] text-muted-foreground font-medium">{p.waitMins}m wait</span>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </Panel>
+
     </div>
   )
 }
 
 /* =========================================================================
-   SUB-COMPONENT 5: Admission Pipeline
+   SUB-COMPONENT 5: Admission Pipeline (Fixed Row Element Missing Error)
    ========================================================================= */
 function AdmissionPipeline({
   stage,
@@ -674,13 +848,29 @@ function AdmissionPipeline({
             ))}
           </div>
         </Panel>
+        
         <Panel>
           <PanelHeader title="Care Team" icon={<Activity className="h-4 w-4" />} />
           <div className="space-y-3 p-4 text-sm">
-            <Row k="Attending" v="Dr. Amelia Shaw" />
-            <Row k="Nurse" v="J. Okonkwo, RN" />
-            <Row k="Target ward" v="General Medicine" />
-            <Row k="ETA to bed" v={<Badge className="border-warning/40 bg-warning/15 text-warning">~22 min</Badge>} />
+            {/* Replaced missing Row element with explicit semantic Tailwind structures */}
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-muted-foreground">Attending</span>
+              <span className="font-medium text-foreground">Dr. Amelia Shaw</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-muted-foreground">Nurse</span>
+              <span className="font-medium text-foreground">J. Okonkwo, RN</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-muted-foreground">Target ward</span>
+              <span className="font-medium text-foreground">General Medicine</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-muted-foreground">ETA to bed</span>
+              <span className="font-medium text-foreground">
+                <Badge className="border-warning/40 bg-warning/15 text-warning">~22 min</Badge>
+              </span>
+            </div>
           </div>
         </Panel>
       </div>
