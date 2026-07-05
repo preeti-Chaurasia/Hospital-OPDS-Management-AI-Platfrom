@@ -33,15 +33,102 @@ import { MedicineSearch } from "../modules/medicine-search"
 import { LabReports } from "../modules/lab-reports"
 import { cn } from "@/lib/utils"
 
+ type QueueItem =
+  | {
+      type: "patient"
+      data: QueuePatient
+    }
+  | 
+  {
+    type:"buffer"
+id:string
+lane:string
+
+capacity:number
+occupied:number
+
+estimatedEntry:string
+date:string
+timeWindow:string
+countdown:string
+runningToken:string
+currentServing:string
+
+patientsAhead:number
+estimatedWait:string
+
+prediction:string
+
+patients:QueuePatient[] 
+    }
+    type BufferItem = Extract<QueueItem, { type: "buffer" }>  
+
 interface DoctorDashboardSectionProps {
   section?: string
 }
-
-export function DoctorCommandCenter({ section = "command" }: DoctorDashboardSectionProps = {}) {
+export function DoctorCommandCenter({
+  section = "command",
+}: DoctorDashboardSectionProps) {
   const [queue, setQueue] = useState<QueuePatient[]>(INITIAL_QUEUE)
+
+    function createBufferQueue(patients: QueuePatient[]): QueueItem[] {
+  const result: QueueItem[] = []
+
+  let lane = 1
+
+  for (let i = 0; i < patients.length; i += 5) {
+    const chunk = patients.slice(i, i + 5)
+
+    // patients block
+   chunk.forEach((p) => {
+  result.push({
+    type: "patient",
+    data: p,
+  })
+})
+
+    // buffer block
+   result.push({
+  type: "buffer",
+
+  id: `B${lane}`,
+  lane: `Room ${lane}`,
+
+  capacity: 5,
+  occupied: chunk.length,
+
+  estimatedEntry: "10:12 AM",
+  date: "Today",
+  timeWindow: "10:00 - 10:30",
+  countdown: "12m",
+  runningToken: "R05",
+  currentServing: "R05",
+
+  patientsAhead: 2,
+  estimatedWait: "20 min",
+
+  prediction: "Doctor free in 4 min",
+
+  patients: chunk,
+})
+
+    lane++
+  }
+
+  return result
+}
+const queueItems = useMemo(() => createBufferQueue(queue), [queue])
+
+
   const [activeId, setActiveId] = useState<string>(INITIAL_QUEUE[0].id)
   const [mobilePanel, setMobilePanel] = useState<"queue" | "file" | "notes">("file")
   const [emergencyMode, setEmergencyMode] = useState(false)
+
+
+  const [selectedBuffer, setSelectedBuffer] =
+useState<BufferItem | null>(null)
+
+const [bufferDrawerOpen, setBufferDrawerOpen] = useState(false)
   
   const toggleEmergencyMode = () => {
     setEmergencyMode((prev) => !prev)
@@ -125,16 +212,24 @@ export function DoctorCommandCenter({ section = "command" }: DoctorDashboardSect
 
       <div className="grid gap-3 lg:grid-cols-12">
         {/* Left: queue */}
-        <div className={cn("lg:col-span-3", mobilePanel !== "queue" && "hidden lg:block")}>
-          <QueueColumn
-            queue={queue}
-            activeId={active?.id}
-            onSelect={(id) => {
-              setActiveId(id)
-              setMobilePanel("file")
-            }}
-          />
-        </div>
+       {/* Left: Buffer Queue */}
+<div className={cn("lg:col-span-3", mobilePanel !== "queue" && "hidden lg:block")}>
+<BufferQueueColumn
+    items={queueItems}
+    activeId={active?.id}
+     onPatientSelect={(id) => {
+    setActiveId(id)
+    setMobilePanel("file")
+    setBufferDrawerOpen(false)
+}}
+    onBufferClick={(buffer) => {
+    if (buffer.type === "buffer") {
+        setSelectedBuffer(buffer)
+        setBufferDrawerOpen(true)
+    }
+}}
+/>
+</div>
 
         {/* Center: open file */}
         <div className={cn("lg:col-span-5", mobilePanel !== "file" && "hidden lg:block")}>
@@ -142,78 +237,480 @@ export function DoctorCommandCenter({ section = "command" }: DoctorDashboardSect
         </div>
 
         {/* Right: clinical notes */}
-        <div className={cn("lg:col-span-4", mobilePanel !== "notes" && "hidden lg:block")}>
-          <ClinicalNotes
-            patient={active}
-            queueLength={queue.length}
-            onCallNext={callNext}
-            onSkip={skip}
-            emergencyMode={emergencyMode}
-            onToggleEmergency={toggleEmergencyMode}
-            onEmergencyActivate={toggleEmergencyMode}
-          />
-        </div>
+       <div className="relative lg:col-span-4">
+
+    <ClinicalNotes
+        patient={active}
+        queueLength={queue.length}
+        onCallNext={callNext}
+        onSkip={skip}
+        emergencyMode={emergencyMode}
+        onToggleEmergency={toggleEmergencyMode}
+        onEmergencyActivate={toggleEmergencyMode}
+    />
+
+    {bufferDrawerOpen && (
+        <BufferDrawer
+            buffer={selectedBuffer}
+            onClose={() => setBufferDrawerOpen(false)}
+        />
+    )}
+
+</div>
+
+</div>
       </div>
+  )
+  }
+function BufferDrawer({
+  buffer,
+  onClose,
+}: {
+  buffer: BufferItem | null
+  onClose: () => void
+}) {
+  if (!buffer) return null
+
+  return (
+    <>
+      {/* Background Blur */}
+      <div
+        onClick={onClose}
+        className="absolute inset-0 bg-black/30 z-40"
+      />()
+
+      {/* Drawer */}
+      <div className="absolute top-0 right-0 h-full w-[430px] bg-white shadow-2xl border-l z-50 animate-in slide-in-from-right duration-300 overflow-y-auto">
+
+        {/* Header */}
+        <div className="sticky top-0 bg-white border-b p-5 flex items-center justify-between">
+
+          <div>
+            <h2 className="text-xl font-bold">
+              {buffer.id}
+            </h2>
+
+            <p className="text-sm text-gray-500">
+              {buffer.lane}
+            </p>
+          </div>
+
+          <button
+            onClick={onClose}
+            className="rounded-lg border p-2 hover:bg-gray-100"
+          >
+            <X className="w-5 h-5"/>
+          </button>
+
+        </div>
+
+        <div className="space-y-5 p-5">
+      
+
+<div className="rounded-xl border p-5">
+
+  <h3 className="text-lg font-semibold">
+    Buffer Slot Information
+  </h3>
+
+  <p className="text-sm text-gray-500 mb-5">
+    Live overview of the current slot
+  </p>
+
+  <div className="grid grid-cols-2 gap-y-4">
+
+    <div>
+      <p className="text-sm text-gray-500">Buffer #</p>
+      <p className="font-semibold">{buffer.id}</p>
     </div>
+
+    <div>
+      <p className="text-sm text-gray-500">Estimated Entry</p>
+      <p className="font-semibold">10:12 AM</p>
+    </div>
+
+    <div>
+      <p className="text-sm text-gray-500">Date</p>
+      <p className="font-semibold">Today</p>
+    </div>
+
+    <div>
+      <p className="text-sm text-gray-500">Current Serving</p>
+      <p className="font-semibold">R05</p>
+    </div>
+
+    <div>
+      <p className="text-sm text-gray-500">Time Window</p>
+      <p className="font-semibold">10:00 - 10:30</p>
+    </div>
+
+    <div>
+      <p className="text-sm text-gray-500">Patients Ahead</p>
+      <p className="font-semibold">2</p>
+    </div>
+
+    <div>
+      <p className="text-sm text-gray-500">Countdown</p>
+      <p className="font-semibold text-orange-500">12m</p>
+    </div>
+
+    <div>
+      <p className="text-sm text-gray-500">Estimated Wait</p>
+      <p className="font-semibold">20 min</p>
+    </div>
+
+    <div>
+      <p className="text-sm text-gray-500">Running Token</p>
+      <p className="font-semibold">R05</p>
+    </div>
+
+    <div>
+      <p className="text-sm text-gray-500">Capacity</p>
+      <p className="font-semibold">
+        {buffer.occupied}/{buffer.capacity}
+      </p>
+    </div>
+
+  </div>
+
+</div>
+          {/* Capacity */}
+
+          <div className="rounded-xl border p-4">
+
+            <p className="text-xs text-gray-500">
+              Capacity
+            </p>
+
+            <p className="mt-2 text-3xl font-bold">
+              {buffer.occupied}/{buffer.capacity}
+            </p>
+
+            <div className="mt-3 h-2 rounded bg-gray-200">
+
+              <div
+                className="h-2 rounded bg-sky-500"
+                style={{
+                  width: `${(buffer.occupied / buffer.capacity) * 100}%`,
+                }}
+              />
+
+            </div>
+
+          </div>
+
+          {/* AI Prediction */}
+
+          <div className="rounded-xl border p-4">
+
+            <h3 className="font-semibold">
+              AI Prediction
+            </h3>
+
+            <p className="mt-2 text-sky-600 font-medium">
+              {buffer.prediction}
+            </p>
+
+          </div>
+
+          {/* Status */}
+
+          <div className="rounded-xl border p-4">
+
+            <h3 className="font-semibold">
+              Buffer Status
+            </h3>
+
+            <p className="mt-2 text-sm text-gray-600">
+
+              Waiting patients stay here until doctor becomes available.
+
+            </p>
+
+          </div>
+
+          {/* AI Suggestions */}
+
+          <div className="rounded-xl border p-4">
+
+            <h3 className="font-semibold mb-3">
+              AI Suggestions
+            </h3>
+
+            <ul className="space-y-2 text-sm">
+
+              <li>
+                ✔ Move next patient after 3 mins
+              </li>
+
+              <li>
+                ✔ Bed likely available in 7 mins
+              </li>
+
+              <li>
+                ✔ Doctor utilization 92%
+              </li>
+
+              <li>
+                ✔ Queue overload risk : Low
+              </li>
+
+            </ul>
+
+          </div>
+
+          {/* Live Analytics */}
+
+          <div className="rounded-xl border p-4">
+
+            <h3 className="font-semibold mb-3">
+              Live Analytics
+            </h3>
+
+            <div className="grid grid-cols-2 gap-3">
+
+              <div className="rounded-lg bg-sky-50 p-3">
+
+                <p className="text-xs text-gray-500">
+                  Avg Wait
+                </p>
+
+                <p className="font-bold text-xl">
+                  8 min
+                </p>
+
+              </div>
+
+              <div className="rounded-lg bg-green-50 p-3">
+
+                <p className="text-xs text-gray-500">
+                  Beds Free
+                </p>
+
+                <p className="font-bold text-xl">
+                  12
+                </p>
+
+              </div>
+
+              <div className="rounded-lg bg-yellow-50 p-3">
+
+                <p className="text-xs text-gray-500">
+                  Critical
+                </p>
+
+                <p className="font-bold text-xl">
+                  1
+                </p>
+
+              </div>
+
+              <div className="rounded-lg bg-red-50 p-3">
+
+                <p className="text-xs text-gray-500">
+                  Occupancy
+                </p>
+
+                <p className="font-bold text-xl">
+                  84%
+                </p>
+
+              </div>
+
+            </div>
+
+          </div>
+
+          {/* Patient List */}
+
+          <div className="rounded-xl border p-4">
+
+            <h3 className="font-semibold mb-3">
+              Patients Inside Buffer
+            </h3>
+
+           {buffer.patients.map((p) => (
+  <div
+    key={p.id}
+    className="flex justify-between border-b py-3"
+  >
+    <div>
+      <p className="font-medium">{p.name}</p>
+
+      <p className="text-xs text-gray-500">
+        {p.complaint} • Waiting {p.waitMins} min
+      </p>
+    </div>
+
+   <Badge
+  className={PRIORITY_STYLES[p.priority as keyof typeof PRIORITY_STYLES].cls}
+>
+  {PRIORITY_STYLES[p.priority as keyof typeof PRIORITY_STYLES].label}
+</Badge>
+  </div>
+))}
+
+          </div>
+
+        </div>
+
+      </div>
+    </>
   )
 }
-
 /* ------------------------------ Queue column ----------------------------- */
 
-function QueueColumn({
-  queue,
+function BufferQueueColumn({
+  items,
   activeId,
-  onSelect,
+  onPatientSelect,
+  onBufferClick,
 }: {
-  queue: QueuePatient[]
+  items: QueueItem[]
   activeId?: string
-  onSelect: (id: string) => void
+  onPatientSelect: (id: string) => void
+ onBufferClick:(buffer:BufferItem)=>void
 }) {
   return (
     <Panel className="flex h-full flex-col">
       <PanelHeader
         title="Active Patient Line"
-        subtitle={`${queue.length} in queue`}
+         subtitle={`${items.filter((i) => i.type === "patient").length} Patients`}
         icon={<UserRound className="h-4 w-4" />}
       />
       <div className="flex-1 divide-y divide-border overflow-y-auto">
-        {queue.map((p, i) => {
-          const ps = PRIORITY_STYLES[p.priority]
-          const selected = p.id === activeId
-          return (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => onSelect(p.id)}
-              className={cn(
-                "flex w-full items-start gap-3 px-3 py-3 text-left transition",
-                selected ? "bg-accent" : "hover:bg-secondary",
-              )}
-            >
-              <div className="flex flex-col items-center">
-                <span className="font-mono text-sm font-bold text-primary">{p.token}</span>
-                {i === 0 ? (
-                  <span className="mt-0.5 text-[9px] font-semibold uppercase text-success">
-                    Up next
-                  </span>
-                ) : null}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="truncate text-sm font-semibold text-foreground">{p.name}</p>
-                  <span className={cn("h-2 w-2 shrink-0 rounded-full", ps.dot)} />
-                </div>
-                <p className="truncate text-xs text-muted-foreground">
-                  {p.age}{p.sex} · {p.complaint}
-                </p>
-                <div className="mt-1.5 flex items-center gap-2">
-                  <Badge className={ps.cls}>{ps.label}</Badge>
-                  <span className="text-[11px] text-muted-foreground">{p.waitMins}m wait</span>
-                </div>
-              </div>
-            </button>
-          )
-        })}
+       {items.map((item, index) => {
+
+  // ---------------- Patient Card ----------------
+
+  if (item.type === "patient") {
+
+    const p = item.data
+    const ps = PRIORITY_STYLES[p.priority]
+    const selected = p.id === activeId
+
+    return (
+      <button
+        key={p.id}
+        type="button"
+        onClick={() => onPatientSelect(p.id)}
+        className={cn(
+          "flex w-full items-start gap-3 px-3 py-3 text-left transition",
+          selected ? "bg-accent" : "hover:bg-secondary",
+        )}
+      >
+        <div className="flex flex-col items-center">
+          <span className="font-mono text-sm font-bold text-primary">
+            {p.token}
+          </span>
+
+          {index === 0 && (
+            <span className="mt-1 text-[10px] text-green-600">
+              Up Next
+            </span>
+          )}
+        </div>
+
+        <div className="flex-1">
+          <p className="font-semibold">{p.name}</p>
+
+          <p className="text-xs text-muted-foreground">
+            {p.age}
+            {p.sex} • {p.complaint}
+          </p>
+
+          <div className="mt-2 flex items-center gap-2">
+            <Badge className={ps.cls}>{ps.label}</Badge>
+
+            <span className="text-xs">
+              {p.waitMins} min
+            </span>
+          </div>
+        </div>
+      </button>
+    )
+  }
+
+ if (item.type === "buffer") {
+  return (
+    <button
+      key={item.id}
+      type="button"
+      onClick={() => onBufferClick(item)}
+      className="
+        w-full
+        px-3
+        py-3
+        text-left
+        transition
+        hover:bg-orange-100
+      "
+    >
+      <div className="rounded-xl border border-orange-300 bg-orange-50 p-4">
+
+        <div className="flex items-center justify-between">
+
+          <div>
+            <p className="text-sm font-bold text-orange-700">
+              BUFFER SLOT {item.id}
+            </p>
+
+            <p className="text-xs text-orange-600">
+              {item.lane}
+            </p>
+          </div>
+
+          <Badge className="bg-orange-200 text-orange-800">
+            {item.occupied}/{item.capacity}
+          </Badge>
+
+        </div>
+
+        <div className="mt-4 space-y-2">
+
+          <div className="flex justify-between text-sm">
+            <span>AI Prediction</span>
+
+            <span className="font-semibold text-sky-600">
+              {item.prediction}
+            </span>
+          </div>
+
+          <div className="flex justify-between text-sm">
+            <span>Current Serving</span>
+
+            <span>{item.currentServing}</span>
+          </div>
+
+          <div className="flex justify-between text-sm">
+            <span>Estimated Wait</span>
+
+            <span>{item.estimatedWait}</span>
+          </div>
+
+        </div>
+
+        <div className="mt-4">
+
+          <div className="h-2 rounded-full bg-orange-200">
+
+            <div
+              className="h-2 rounded-full bg-orange-500"
+              style={{
+                width: `${(item.occupied / item.capacity) * 100}%`,
+              }}
+            />
+
+          </div>
+
+        </div>
+
+      </div>
+    </button>
+  )
+}
+
+})}
       </div>
     </Panel>
   )
@@ -374,7 +871,7 @@ function ClinicalNotes({
   onSkip,
   emergencyMode,
   onToggleEmergency,
-  onEmergencyActivate,
+
 }: {
   patient?: QueuePatient
   queueLength: number
@@ -590,7 +1087,6 @@ function ClinicalNotes({
           type="button"
           onClick={() => {
             onToggleEmergency()
-            onEmergencyActivate()
             flash(emergencyMode ? "Emergency Mode disabled" : "Emergency Mode activated - wait times +10min")
           }}
           className={cn(
