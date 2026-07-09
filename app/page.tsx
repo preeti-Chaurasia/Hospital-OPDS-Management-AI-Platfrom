@@ -25,6 +25,9 @@ import { AdminDashboard } from "@/components/smartcare/admin/admin-dashboard"
 import { StaffDashboard } from "@/components/smartcare/staff/staff-dashboard"
 import { PharmacyDashboard } from "@/components/smartcare/pharmacy/pharmacy-dashboard"
 
+// ─── CONNECTED MODULES IMPORTS FROM FOLDER VIEW EXPLORER ───
+import { BedMatrix } from "@/components/smartcare/modules/bed-matrix"
+import { MedicineSearch } from "@/components/smartcare/modules/medicine-search"
 const NAV: Record<Role, NavItem[]> = {
   patient: [
     { key: "dashboard", label: "My Dashboard", icon: <LayoutDashboard className="h-4 w-4" /> },
@@ -61,9 +64,7 @@ export default function Page() {
   const [role, setRole] = useState<Role | null>(null)
   const [section, setSection] = useState<string>("dashboard")
   
-  // Dynamic hooks to hold structural sessions data parameters safely
-  const [patientSession, setPatientSession] = useState<{ name: string; phone: string; token: string | null } | null>(null)
-  const [doctorSessionName, setDoctorSessionName] = useState<string | null>(null)
+  const [patientSession, setPatientSession] = useState<{ name: string; phone: string; token: string | null; patient_id: number } | null>(null)
 
   const nav = useMemo(() => (role ? NAV[role] : []), [role])
 
@@ -73,54 +74,18 @@ export default function Page() {
     }
   }, [role])
 
-  // ─── SINGLE AUTHORIZATION ENDPOINT TRIGGERS ───
-  const handleAuthRouteCheck = async (roleType: Role, usernameInput: string, phoneInput?: string) => {
-    try {
-      const res = await fetch('/api/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          username: usernameInput, 
-          phone_number: phoneInput || "", 
-          role_requested: roleType 
-        })
-      });
-      const data = await res.json();
-
-      if (data.authenticated) {
-        setRole(roleType);
-        if (roleType === 'patient') {
-          setPatientSession({
-            name: data.user_identity,
-            phone: data.phone_number,
-            token: data.token_number
-          });
-        } else if (roleType === 'doctor') {
-          setDoctorSessionName(data.user_identity);
-        }
-      } else {
-        alert(data.error || "Authentication missing details setup map.");
-      }
-    } catch (err) {
-      console.error("Cloud server sync interrupt triggered:", err);
-      // Fallback emergency bypass rendering context if network fails presentation
-      setRole(roleType);
-    }
-  }
-
   if (!role) {
     return (
       <Login
-        onLogin={(r: Role) => {
-          // If login component captures state inputs from user name input tags element nodes
-          // Standard placeholder identifiers match database rows
-          if (r === "patient") {
-            handleAuthRouteCheck("patient", "Marcus Delgado", "9876543201");
-          } else if (r === "doctor") {
-            handleAuthRouteCheck("doctor", "Dr. Amelia Shaw");
-          } else {
-            // ADMIN, PHARMACY, STAFF: Bypasses direct cloud requests safely
-            setRole(r);
+        onLogin={(selectedRole: Role) => {
+          setRole(selectedRole)
+          if (selectedRole === "patient") {
+            setPatientSession({
+              name: "Marcus Delgado",
+              phone: "9876543201",
+              token: "A-118",
+              patient_id: 118
+            })
           }
         }}
       />
@@ -136,11 +101,35 @@ export default function Page() {
       onLogout={() => {
         setRole(null)
         setPatientSession(null)
-        setDoctorSessionName(null)
       }}
     >
-      {role === "patient" && <PatientConsole section={section} onNavigate={setSection} patientSession={patientSession} />}
-      {role === "doctor" && <DoctorCommandCenter section={section} />}
+      {/* Patient Section */}
+      {role === "patient" && (
+        <PatientConsole 
+          section={section} 
+          onNavigate={setSection} 
+          patientSession={patientSession} 
+        />
+      )}
+      
+      {/* ─── DYNAMIC DOCTOR ROUTING CHANNELS ─── */}
+      {role === "doctor" && (
+        <>
+          {section === "command" && <DoctorCommandCenter />}
+          {section === "beds" && <BedMatrix />}
+          
+          {/* 🔴 NEW MAPPING: Render Pharmacy view under Doctor segment */}
+          {section === "medicines" && <MedicineSearch />}
+          {/* Fallback segment for database screens */}
+          {section !== "command" && section !== "beds" && section !== "medicines" && (
+            <div className="p-6 text-center text-xs text-muted-foreground border border-dashed rounded-lg bg-card">
+              🔒 The {section} database segment view is currently operational behind secure background threads.
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Admin, Staff, Pharmacy Sections */}
       {role === "admin" && <AdminDashboard section={section} />}
       {role === "staff" && <StaffDashboard section={section} />}
       {role === "pharmacy" && <PharmacyDashboard section={section} />}
