@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, useEffect } from "react"
 import {
   Bed,
   BarChart3,
@@ -12,14 +12,9 @@ import {
   Route,
   Stethoscope,
   UserPlus,
-  Users,
-  AlertCircle,
-  Package,
-  CheckCircle,
-  FlaskConical,
-  AlertTriangle,
   TrendingDown,
-  FileText // Clean representation for Pathology laboratory requests
+  FileText,
+  FlaskConical
 } from "lucide-react"
 import type { Role } from "@/lib/medical-data"
 import { Login } from "@/components/smartcare/login"
@@ -30,6 +25,9 @@ import { AdminDashboard } from "@/components/smartcare/admin/admin-dashboard"
 import { StaffDashboard } from "@/components/smartcare/staff/staff-dashboard"
 import { PharmacyDashboard } from "@/components/smartcare/pharmacy/pharmacy-dashboard"
 
+// ─── CONNECTED MODULES IMPORTS FROM FOLDER VIEW EXPLORER ───
+import { BedMatrix } from "@/components/smartcare/modules/bed-matrix"
+import { MedicineSearch } from "@/components/smartcare/modules/medicine-search"
 const NAV: Record<Role, NavItem[]> = {
   patient: [
     { key: "dashboard", label: "My Dashboard", icon: <LayoutDashboard className="h-4 w-4" /> },
@@ -50,57 +48,45 @@ const NAV: Record<Role, NavItem[]> = {
     { key: "pharmacy", label: "Pharmacy Inventory", icon: <Pill className="h-4 w-4" /> },
     { key: "reports", label: "Clinical Reports", icon: <ClipboardList className="h-4 w-4" /> },
   ],
-  /* =========================================================================
-     STREAMLINED STAFF WORKSPACE (RECEPTIONIST + LAB TECHNICIAN)
-     ========================================================================= */
   staff: [
-    { 
-      key: "dashboard", 
-      label: "Dashboard", 
-      icon: <LayoutDashboard className="h-4 w-4" /> 
-    },
-    { 
-      key: "registration", 
-      label: "Patient Registration", 
-      icon: <UserPlus className="h-4 w-4" /> 
-    },
-    { 
-      key: "labs", 
-      label: "Lab Reports", 
-      icon: <FileText className="h-4 w-4" /> 
-    },
+    { key: "dashboard", label: "Dashboard", icon: <LayoutDashboard className="h-4 w-4" /> },
+    { key: "registration", label: "Patient Registration", icon: <UserPlus className="h-4 w-4" /> },
+    { key: "labs", label: "Lab Reports", icon: <FileText className="h-4 w-4" /> },
   ],
   pharmacy: [
-    { 
-      key: "dashboard", 
-      label: "Dashboard", 
-      icon: <LayoutDashboard className="h-4 w-4" /> 
-    },
-    { 
-      key: "inventory", 
-      label: "Smart Inventory & Alerts", 
-      icon: <Pill className="h-4 w-4" /> 
-    },
-    { 
-      key: "predictions", 
-      label: "AI Demand Predictions", 
-      icon: <TrendingDown className="h-4 w-4" /> 
-    },
+    { key: "dashboard", label: "Dashboard", icon: <LayoutDashboard className="h-4 w-4" /> },
+    { key: "inventory", label: "Smart Inventory & Alerts", icon: <Pill className="h-4 w-4" /> },
+    { key: "predictions", label: "AI Demand Predictions", icon: <TrendingDown className="h-4 w-4" /> },
   ],
 }
 
 export default function Page() {
   const [role, setRole] = useState<Role | null>(null)
   const [section, setSection] = useState<string>("dashboard")
+  
+  const [patientSession, setPatientSession] = useState<{ name: string; phone: string; token: string | null; patient_id: number } | null>(null)
 
   const nav = useMemo(() => (role ? NAV[role] : []), [role])
+
+  useEffect(() => {
+    if (role && NAV[role]?.[0]) {
+      setSection(NAV[role][0].key)
+    }
+  }, [role])
 
   if (!role) {
     return (
       <Login
-        onLogin={(r) => {
-          setRole(r)
-          setSection(NAV[r][0].key)
+        onLogin={(selectedRole: Role) => {
+          setRole(selectedRole)
+          if (selectedRole === "patient") {
+            setPatientSession({
+              name: "Marcus Delgado",
+              phone: "9876543201",
+              token: "A-118",
+              patient_id: 118
+            })
+          }
         }}
       />
     )
@@ -112,10 +98,38 @@ export default function Page() {
       nav={nav}
       active={section}
       onNavigate={setSection}
-      onLogout={() => setRole(null)}
+      onLogout={() => {
+        setRole(null)
+        setPatientSession(null)
+      }}
     >
-      {role === "patient" && <PatientConsole section={section} onNavigate={setSection} />}
-      {role === "doctor" && <DoctorCommandCenter section={section} />}
+      {/* Patient Section */}
+      {role === "patient" && (
+        <PatientConsole 
+          section={section} 
+          onNavigate={setSection} 
+          patientSession={patientSession} 
+        />
+      )}
+      
+      {/* ─── DYNAMIC DOCTOR ROUTING CHANNELS ─── */}
+      {role === "doctor" && (
+        <>
+          {section === "command" && <DoctorCommandCenter />}
+          {section === "beds" && <BedMatrix />}
+          
+          {/* 🔴 NEW MAPPING: Render Pharmacy view under Doctor segment */}
+          {section === "medicines" && <MedicineSearch />}
+          {/* Fallback segment for database screens */}
+          {section !== "command" && section !== "beds" && section !== "medicines" && (
+            <div className="p-6 text-center text-xs text-muted-foreground border border-dashed rounded-lg bg-card">
+              🔒 The {section} database segment view is currently operational behind secure background threads.
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Admin, Staff, Pharmacy Sections */}
       {role === "admin" && <AdminDashboard section={section} />}
       {role === "staff" && <StaffDashboard section={section} />}
       {role === "pharmacy" && <PharmacyDashboard section={section} />}
