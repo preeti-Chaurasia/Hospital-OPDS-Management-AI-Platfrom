@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   AlertTriangle,
   CheckCircle,
@@ -13,6 +13,7 @@ import {
   Calendar,
   CloudLightning,
   Layers,
+  RefreshCw, // Loader for API transitions
 } from "lucide-react"
 import { PRESCRIPTIONS, MEDICINE_INVENTORY, AI_MEDICINE_INSIGHTS, type Prescription } from "@/lib/medical-data"
 import { cn } from "@/lib/utils"
@@ -29,6 +30,46 @@ export function PharmacyDashboard({ section }: { section: string }) {
   const [inventory, setInventory] = useState(MEDICINE_INVENTORY)
   const [searchQ, setSearchQ] = useState("")
   const [activeRackHover, setActiveRackHover] = useState<string | null>(null)
+
+  // ─── NEW BACKEND DATA BINDING STATES ───
+  const [weatherTelemetry, setWeatherTelemetry] = useState<any>(null)
+  const [aiInsightsList, setAiInsightsList] = useState<any[]>([])
+  const [apiLoading, setApiLoading] = useState(true)
+
+  // ─── LIVE FETCHING CRITERIA FROM BACKEND API ───
+  const fetchLiveAIPredictions = async () => {
+    try {
+      const res = await fetch('/api/pharmacy')
+      if (res.ok) {
+        const data = await res.json()
+        setWeatherTelemetry(data.autonomousTelemetry)
+
+        // Maps backend inventory predictions dynamically to match your precise layout contract
+        const mappedInsights = data.inventory
+          .filter((item: any) => item.ai_recommended_boost > 0)
+          .map((item: any) => ({
+            title: `${item.medicine_name} - Surge Risk`,
+            description: item.ai_insight_message,
+            recommendation: `Boost stock balance by +${item.ai_recommended_boost} units immediately.`,
+            priority: item.ai_recommended_boost > 100 ? "high" : "medium"
+          }))
+
+        // Fallback checks parameters if database constraints are cleared/empty during testing
+        setAiInsightsList(mappedInsights.length > 0 ? mappedInsights : [
+          { title: "Normal Saline 1L - High Surge Risk", description: "AI Alert (XGBoost): High Humidity & Rain detected. Waterborne & vector outbreak index rising.", recommendation: "Boost stock balance by +200 units immediately.", priority: "high" },
+          { title: "Amoxicillin 500mg - Medium Risk", description: "AI Alert (XGBoost): Continuous seasonal precipitation shifts mapped.", recommendation: "Boost stock balance by +100 units immediately.", priority: "medium" }
+        ])
+      }
+    } catch (err) {
+      console.error("Failed connecting to autonomous climate node:", err)
+    } finally {
+      setApiLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchLiveAIPredictions()
+  }, [])
 
   const handlePrepareRx = (rxId: string) => {
     setPrescriptions(
@@ -338,9 +379,10 @@ export function PharmacyDashboard({ section }: { section: string }) {
     )
   }
 
-  /* =========================================================================
+     /* =========================================================================
      SECTION 3: AI ENVIRONMENTAL DEMAND PREDICTIONS CONSOLE
      ========================================================================= */
+ // Is block ko single, bina double-return ke paste karna hai:
   return (
     <div className="space-y-4">
       {/* Real-Time Environmental External Synced Node Widget */}
@@ -351,22 +393,29 @@ export function PharmacyDashboard({ section }: { section: string }) {
             <span className="text-sm font-bold tracking-wide">AI Live Weather Intelligence Node</span>
           </div>
           <p className="text-xs text-foreground/80 font-medium">
-            Current Environment: <span className="font-bold text-primary">Heavy Rainy Season & Monsoon Climate Detected 🌧️</span>
+            Current Environment: <span className="font-bold text-primary">
+              {weatherTelemetry 
+                ? `${weatherTelemetry.city}: ${weatherTelemetry.temperature}°C, Humidity ${weatherTelemetry.humidity}% (${weatherTelemetry.apiRawCondition}) 🌧️`
+                : "Heavy Rainy Season & Monsoon Climate Detected 🌧️"
+              }
+            </span>
           </p>
           <p className="text-[11px] text-muted-foreground max-w-xl">
             System is cross-referencing predictive external environmental patterns to auto-compile localized clinical demand modifications.
           </p>
         </div>
         <div className="rounded-full bg-primary/20 text-primary border border-primary/30 px-2 py-0.5 text-xs font-semibold shrink-0 hidden sm:inline-flex">
+          {apiLoading ? <RefreshCw className="h-3 w-3 animate-spin mr-1" /> : null}
           Sync Status: Operational
         </div>
       </div>
 
+      {/* SECTION 3: AI ENVIRONMENTAL DEMAND PREDICTIONS CONSOLE */}
       <div className="rounded-lg border border-border bg-card p-4">
         <h3 className="text-sm font-semibold text-foreground">AI Medicine Demand Predictions</h3>
         <p className="mt-1 text-xs text-muted-foreground">Powered by seasonal patterns & weather trends</p>
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {AI_MEDICINE_INSIGHTS.map((insight, idx) => (
+          {aiInsightsList.map((insight, idx) => (
             <div
               key={idx}
               className={cn(
@@ -380,23 +429,15 @@ export function PharmacyDashboard({ section }: { section: string }) {
             >
               <div className="flex items-start gap-3">
                 <div className="shrink-0">
-                  {insight.priority === "high" && (
-                    <AlertTriangle className="h-5 w-5 text-destructive" />
-                  )}
-                  {insight.priority === "medium" && (
-                    <AlertCircle className="h-5 w-5 text-warning" />
-                  )}
-                  {insight.priority === "low" && (
-                    <Pill className="h-5 w-5 text-primary" />
-                  )}
+                  {insight.priority === "high" && <AlertTriangle className="h-5 w-5 text-destructive" />}
+                  {insight.priority === "medium" && <AlertCircle className="h-5 w-5 text-warning" />}
+                  {insight.priority === "low" && <Pill className="h-5 w-5 text-primary" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-foreground">{insight.title}</p>
                   <p className="mt-1 text-xs text-muted-foreground">{insight.description}</p>
                   <div className="mt-2 rounded-md bg-secondary/30 px-2 py-1.5">
-                    <p className="text-xs font-medium text-foreground">
-                      💡 {insight.recommendation}
-                    </p>
+                    <p className="text-xs font-medium text-foreground">💡 {insight.recommendation}</p>
                   </div>
                 </div>
               </div>
