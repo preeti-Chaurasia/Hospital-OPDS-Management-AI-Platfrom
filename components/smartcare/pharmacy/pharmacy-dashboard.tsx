@@ -39,7 +39,7 @@ export function PharmacyDashboard({ section }: { section: string }) {
   // ─── LIVE FETCHING CRITERIA FROM BACKEND API ───
   const fetchLiveAIPredictions = async () => {
     try {
-      const res = await fetch('/api/pharmacy')
+      const res = await fetch('/api/pharmacy/weather?city=Surat')
       if (res.ok) {
         const data = await res.json()
         setWeatherTelemetry(data.autonomousTelemetry)
