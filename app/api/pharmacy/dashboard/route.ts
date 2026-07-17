@@ -67,30 +67,19 @@ ORDER BY medicine_name ASC
         const queue = await db.query(`
 
 SELECT
-
+pr.prescription_id AS id,
 p.full_name,
-
 a.doctor_name,
-
 pr.medicine_name,
-
 po.order_status
-
 FROM prescriptions pr
-
 JOIN appointments a
-
-ON pr.appointment_id=a.appointment_id
-
+  ON pr.appointment_id = a.appointment_id
 JOIN patients p
-
-ON a.patient_id=p.patient_id
-
+  ON a.patient_id = p.patient_id
 LEFT JOIN pharmacy_orders po
-
-ON po.prescription_id=pr.prescription_id
-
-ORDER BY pr.prescription_id DESC
+  ON po.prescription_id = pr.prescription_id
+ORDER BY pr.prescription_id DESC;
 
         `);
 

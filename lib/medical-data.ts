@@ -248,40 +248,80 @@ export const COMMON_MEDS = [
   "Ceftriaxone 1g IV",
 ]
 
-export type BedStatus = "Occupied" | "Available" | "Vacating Soon"
-
+export type BedStatus =
+  | "Available"
+  | "Occupied"
+  | "Vacating Soon"
+  | "Cleaning Required"
+  | "Cleaning In Progress";
 export interface Bed {
-  id: string
-  ward: string
-  status: BedStatus
+
+id:string
+
+ward:string
+
+status:BedStatus
+
+lastUpdated?:string
+
+assignedPatient?:string
+
 }
 
 export const WARDS = ["ICU", "General Medicine", "Pediatrics", "Surgical"] as const
 
+
 export function buildBeds(): Bed[] {
   const beds: Bed[] = []
+
   const config: Record<string, number> = {
     ICU: 12,
     "General Medicine": 16,
     Pediatrics: 10,
     Surgical: 12,
   }
-  const statuses: BedStatus[] = ["Occupied", "Available", "Vacating Soon"]
+
   for (const ward of WARDS) {
     for (let i = 1; i <= config[ward]; i++) {
+
       const r = (i * 7 + ward.length * 3) % 10
+
       const status: BedStatus =
-        r < 6 ? "Occupied" : r < 8 ? "Available" : "Vacating Soon"
-      beds.push({ id: `${ward.slice(0, 3).toUpperCase()}-${i.toString().padStart(2, "0")}`, ward, status })
+        r < 6
+          ? "Occupied"
+          : r < 8
+          ? "Available"
+          : "Vacating Soon"
+
+      beds.push({
+        id: `${ward.slice(0, 3).toUpperCase()}-${i
+          .toString()
+          .padStart(2, "0")}`,
+        ward,
+        status,
+        lastUpdated: new Date().toLocaleString(),
+        assignedPatient: "",
+      })
     }
   }
+
   return beds
 }
 
 export const BED_STATUS_STYLES: Record<BedStatus, string> = {
   Occupied: "bg-destructive/10 text-destructive border-destructive/30",
+  "Vacating Soon":
+    "border-yellow-500 bg-yellow-50",
+
+  "Cleaning Required":
+    "border-orange-500 bg-orange-50",
+
+  "Cleaning In Progress":
+    "border-blue-500 bg-blue-50",
+
+
   Available: "bg-success/10 text-success border-success/30",
-  "Vacating Soon": "bg-warning/15 text-warning border-warning/40",
+
 }
 
 export interface PharmacyItem {
@@ -333,6 +373,14 @@ export const LAB_TESTS: LabTest[] = [
   { id: "lab-3", patientName: "Edward Chen", testType: "MRI Lumbar Spine", requestedBy: "Dr. Anderson", status: "Pending", requestedAt: "09:33 AM" },
   { id: "lab-4", patientName: "Henry Okafor", testType: "BNP, Echocardiogram", requestedBy: "Dr. Kumar", status: "Ready", requestedAt: "07:55 AM" },
 ]
+export interface BufferPatient {
+  id: string
+  token: string
+  patientName: string
+  reason: string
+  estimatedTime: string
+  status: "Waiting" | "Lab Pending" | "Ready"
+}
 
 export type PrescriptionStatus = "New" | "Being Prepared" | "Ready for Pickup" | "Dispensed"
 

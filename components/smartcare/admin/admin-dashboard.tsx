@@ -230,20 +230,29 @@ function WardLoadPanel({ wards }: { wards: any[] }) {
 
 /* ------------------------------- Bed matrix ------------------------------ */
 
-function BedMatrix() {
+/* ------------------------------- Bed matrix ------------------------------ */
+
+export default function BedMatrix() {
   const [beds, setBeds] = useState<Bed[]>(() => buildBeds())
   const [ward, setWard] = useState<(typeof WARDS)[number] | "All">("All")
   
   const [timelineMode, setTimelineMode] = useState<"current" | "predicted">("current")
   const [optimizationLogs, setOptimizationLogs] = useState<string[]>([])
 
-  const cycle: Record<BedStatus, BedStatus> = {
-    Occupied: "Vacating Soon",
+  // Dynamic Status Cycle with Cleaning Phase integration
+  const cycle: Record<string, string> = {
+    "Occupied": "Vacating Soon",
     "Vacating Soon": "Available",
-    Available: "Occupied",
+    "Available": "Cleaning Phase",
+    "Cleaning Phase": "Occupied",
   }
 
-  // UPDATED: Dynamic 12h Logic with Higher Available Impact Count (3-4 Beds Difference)
+  // Local style configuration overrides to dynamic layout injected seamlessly
+  const currentStyles: Record<string, string> = {
+    ...BED_STATUS_STYLES,
+    "Cleaning Phase": "border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400 dark:bg-blue-500/20",
+  }
+
   const handleTimelinePrediction = () => {
     setTimelineMode("predicted")
     setOptimizationLogs([
@@ -256,13 +265,11 @@ function BedMatrix() {
     
     setBeds((currentBeds) =>
       currentBeds.map((b) => {
-        // Free up major critical zones (Increases total Available count significantly)
         if (b.id === "ICU-02" || b.id === "ICU-07" || b.id === "ICU-09" || b.id === "PED-02") {
-          return { ...b, status: "Available" }
+          return { ...b, status: "Available" as BedStatus }
         }
-        // Change multiple dynamic status to clear out old states and amplify numbers
         if (b.id === "GEN-01" || b.id === "GEN-03" || b.id === "SURG-04") {
-          return { ...b, status: "Vacating Soon" }
+          return { ...b, status: "Vacating Soon" as BedStatus }
         }
         return b
       })
@@ -281,8 +288,12 @@ function BedMatrix() {
   )
 
   const counts = useMemo(() => {
-    const c = { Occupied: 0, Available: 0, "Vacating Soon": 0 }
-    for (const b of visible) c[b.status]++
+    const c = { Occupied: 0, Available: 0, "Vacating Soon": 0, "Cleaning Phase": 0 }
+    for (const b of visible) {
+      if (b.status in c) {
+        c[b.status as keyof typeof c]++
+      }
+    }
     return c
   }, [visible])
 
@@ -297,7 +308,6 @@ function BedMatrix() {
             <div>
               <h3 className="text-sm font-bold uppercase tracking-wider text-foreground flex items-center gap-2">
                 Predictive Resource Logistics Core Engine
-                
               </h3>
               <p className="text-xs text-muted-foreground mt-0.5 max-w-2xl">
                 Simulates predictive downstream ward flow. Our ML engine matches upcoming ICU step-down clearances with expected general and surgical bed availabilities 12 hours in advance to eliminate bottleneck overheads.
@@ -346,10 +356,11 @@ function BedMatrix() {
         )}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-4">
         <Stat label="Occupied" value={counts.Occupied} sub="Active patients" icon={<BedDouble className="h-4 w-4" />} tone="danger" />
         <Stat label="Available" value={counts.Available} sub="Ready for allocation" icon={<BedDouble className="h-4 w-4" />} tone="success" />
         <Stat label="Vacating Soon" value={counts["Vacating Soon"]} sub="Predicted discharge" icon={<BedDouble className="h-4 w-4" />} tone="warning" />
+        <Stat label="Cleaning Phase" value={counts["Cleaning Phase"]} sub="Housekeeping turn-around" icon={<BedDouble className="h-4 w-4" />} />
       </div>
 
       <Panel>
@@ -392,12 +403,12 @@ function BedMatrix() {
                       type="button"
                       onClick={() =>
                         setBeds((list) =>
-                          list.map((x) => (x.id === b.id ? { ...x, status: cycle[x.status] } : x)),
+                          list.map((x) => (x.id === b.id ? { ...x, status: cycle[x.status] as BedStatus } : x)),
                         )
                       }
                       className={cn(
                         "rounded-md border p-2 text-left transition hover:ring-2 hover:ring-ring/30",
-                        BED_STATUS_STYLES[b.status],
+                        currentStyles[b.status],
                       )}
                     >
                       <span className="block font-mono text-xs font-bold">{b.id}</span>
@@ -409,10 +420,12 @@ function BedMatrix() {
             )
           })}
         </div>
+        
         <div className="flex flex-wrap items-center gap-4 border-t border-border px-4 py-3 text-xs">
           <Legend cls="bg-destructive" label="Occupied" />
           <Legend cls="bg-success" label="Available" />
           <Legend cls="bg-warning" label="Vacating Soon" />
+          <Legend cls="bg-blue-500" label="Cleaning Phase" />
         </div>
       </Panel>
     </div>

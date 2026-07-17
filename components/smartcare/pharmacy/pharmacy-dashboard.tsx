@@ -86,7 +86,7 @@ setPrescriptions(
 
 prescriptions.map((p)=>
 
-p.id===id
+p.prescription_id===id
 
 ? {...p,order_status:"Being Prepared"}
 
@@ -104,7 +104,7 @@ setPrescriptions(
 
 prescriptions.map((p)=>
 
-p.id===id
+p.prescription_id===id
 
 ? {...p,order_status:"Dispensed"}
 
@@ -122,7 +122,7 @@ setPrescriptions(
 
 prescriptions.map((p)=>
 
-p.id===id
+p.prescription_id===id
 
 ? {...p,order_status:"Ready"}
 
@@ -196,16 +196,20 @@ const outOfStockCount = (inventory ?? []).filter(
 
             <div className="space-y-2.5 overflow-y-auto pr-1" style={{ maxHeight: 380 }}>
               {prescriptions
-                .filter(
-(p)=>
+               .filter((p) => {
+  const name = p.full_name ?? "";
+  const medicines = p.medicines ?? "";
 
-p.full_name.toLowerCase().includes(searchQ.toLowerCase()) ||
-
-(p.medicines ?? "").toLowerCase().includes(searchQ.toLowerCase())
-
-)
-                .map((p) => (
-                  <div key={p.id} className="rounded-lg border border-border bg-secondary/20 p-3 text-xs transition hover:bg-secondary/40">
+  return (
+    name.toLowerCase().includes(searchQ.toLowerCase()) ||
+    medicines.toLowerCase().includes(searchQ.toLowerCase())
+  );
+})
+                .map((p, index) => (
+  <div
+    key={`${p.id ?? p.prescription_id ?? "item"}-${index}`}
+    className="rounded-lg border border-border bg-secondary/20 p-3"
+  >
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0 flex-1">
                         <p className="font-semibold text-sm text-foreground">{p.full_name}</p>
@@ -227,7 +231,7 @@ p.full_name.toLowerCase().includes(searchQ.toLowerCase()) ||
                           <>
                             <span className="font-semibold text-primary">New Order</span>
                             <button
-                              onClick={() => handlePrepareRx(p.id)}
+                              onClick={() => handlePrepareRx(p.prescription_id)}
                               className="rounded-md bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary hover:bg-primary/20"
                             >
                               Prepare
@@ -240,7 +244,7 @@ p.full_name.toLowerCase().includes(searchQ.toLowerCase()) ||
                               <Clock className="h-3 w-3 animate-spin" /> Packaging
                             </span>
                             <button
-                              onClick={() => handleMarkReady(p.id)}
+                              onClick={() => handleMarkReady(p.prescription_id)}
                               className="rounded-md bg-success/10 px-2.5 py-1 text-[11px] font-medium text-success hover:bg-success/20"
                             >
                               Ready
@@ -253,7 +257,7 @@ p.full_name.toLowerCase().includes(searchQ.toLowerCase()) ||
                               <CheckCircle className="h-3 w-3" /> Waiting at Counter
                             </span>
                             <button
-                              onClick={() => handleDispenseRx(p.id)}
+                              onClick={() => handleDispenseRx(p.prescription_id)}
                               className="rounded-md bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary hover:bg-primary/20"
                             >
                               Dispense (Hand Over)
@@ -275,8 +279,9 @@ p.full_name.toLowerCase().includes(searchQ.toLowerCase()) ||
           <div className="rounded-lg border border-border bg-card p-4 h-fit">
             <h3 className="text-sm font-semibold text-foreground border-b border-border pb-2">Recent Activity Log</h3>
             <div className="mt-3 space-y-2.5">
+              console.log(activityLogs);
               {activityLogs.map((log)=>(
-                <div key={log.id} className="flex flex-col gap-1 border-l-2 border-primary/30 bg-secondary/30 px-3 py-1.5 rounded-r-md">
+                <div key={log.activity_id} className="flex flex-col gap-1 border-l-2 border-primary/30 bg-secondary/30 px-3 py-1.5 rounded-r-md">
                   <span className="shrink-0 text-[10px] font-mono text-muted-foreground">{log.time}</span>
                   <p className="text-xs text-foreground/80 font-medium leading-normal">{log.description}</p>
                 </div>

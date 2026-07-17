@@ -51,7 +51,7 @@ export function DoctorCommandCenter() {
 
   // ─── UPDATED: CONVERTED TO REACTIVE STATE MATRIX FOR IMMUTABLE FLOWS ───
   const [beds, setBeds] = useState(() => buildBeds())
-
+const [selectedBed, setSelectedBed] = useState<any>(null)
   // Emergency Button Handler
   const handleToggleEmergency = () => {
     const isActivating = !emergencyMode
@@ -93,13 +93,15 @@ export function DoctorCommandCenter() {
   }
 
   // ─── NEW HANDLER: DIRECT ALLOCATION FLOW FLIPPER ───
-  const handleAllocateBedToPatient = (bedId: string) => {
-    setBeds((currentBeds) =>
-      currentBeds.map((b) => (b.id === bedId ? { ...b, status: "Occupied" } : b))
+const handleDischargePatient = (bedId: string) => {
+  setBeds((currentBeds) =>
+    currentBeds.map((b) =>
+      b.id === bedId
+        ? { ...b, status: "Cleaning Required" }
+        : b
     )
-    handleSkipPatient() // Auto forwards current patient structure out of queue stream
-    setIsAdmitModalOpen(false) // Dynamic modal clear
-  }
+  )
+}
 
   // ─── ✅ MODIFIED HANDLER: AUTONOMOUS PHARMACY STOCK GUARDRAIL ENGINE ───
   const handleAddMedicine = (medName: string) => {
@@ -426,6 +428,12 @@ export function DoctorCommandCenter() {
                     <button onClick={() => setIsAdmitModalOpen(true)} className="rounded-md bg-amber-600/10 border border-amber-600/20 py-2 text-xs font-bold text-amber-700 hover:bg-amber-600/20 transition">
                       Admit Patient
                     </button>
+                    <button
+  onClick={() => handleDischargePatient(selectedBed?.id)}
+  className="rounded-md bg-red-600 text-white py-2 text-xs font-bold"
+>
+  Discharge Patient
+</button>
                   </div>
 
                   <button onClick={handleCallNextPatient} className="w-full rounded-md bg-primary py-2.5 text-xs font-bold text-primary-foreground shadow hover:opacity-90 transition">
@@ -463,19 +471,15 @@ export function DoctorCommandCenter() {
             
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 text-xs font-medium">
               {/* 🔴 EXCLUSIVE STRICT FILTER LOOP RENDERING */}
-              {beds
-                .filter((bed) => bed.status === "Available" || bed.status === "Vacating Soon")
-                .map((bed) => (
-                  <div
-                    key={bed.id}
-                    onClick={() => handleAllocateBedToPatient(bed.id)}
-                    className={cn(
-                      "border p-3 rounded-lg text-center cursor-pointer transition transform hover:scale-105 hover:ring-2 hover:ring-ring/20",
-                      bed.status === "Available" 
-                        ? "bg-success/10 text-success border-success/30 hover:bg-success/20" 
-                        : "bg-warning/10 text-warning border-warning/30 hover:bg-warning/20"
-                    )}
-                  >
+              {beds.map((bed) => (
+                 <div
+  key={bed.id}
+  onClick={() => setSelectedBed(bed)}
+  className={cn(
+    "border p-3 rounded-lg text-center cursor-pointer transition transform hover:scale-105 hover:ring-2 hover:ring-ring/20",
+    BED_STATUS_STYLES[bed.status]
+  )}
+>
                     <p className="font-bold text-sm">{bed.id}</p>
                     <p className="text-[10px] mt-0.5 opacity-80">{bed.ward}</p>
                     <span className="text-[9px] mt-2 block font-semibold px-1 py-0.5 rounded bg-background/50 uppercase tracking-wide">
@@ -484,6 +488,21 @@ export function DoctorCommandCenter() {
                   </div>
                 ))}
             </div>
+
+
+{selectedBed && (
+  <div className="mt-4 rounded-lg border p-4 bg-card">
+    <h3 className="font-bold text-lg">Bed Details</h3>
+
+    <p><strong>Bed ID:</strong> {selectedBed.id}</p>
+    <p><strong>Ward:</strong> {selectedBed.ward}</p>
+    <p><strong>Status:</strong> {selectedBed.status}</p>
+    <p><strong>Last Updated:</strong> {selectedBed.lastUpdated}</p>
+
+  
+  </div>
+)}
+
 
             {/* Empty check helper context */}
             {beds.filter((bed) => bed.status === "Available" || bed.status === "Vacating Soon").length === 0 && (
