@@ -15,6 +15,7 @@ import {
   Layers,
   RefreshCw, // Loader for API transitions
 } from "lucide-react"
+
 import { PRESCRIPTIONS, MEDICINE_INVENTORY, type Prescription } from "@/lib/medical-data"
 import { cn } from "@/lib/utils"
 
@@ -26,8 +27,10 @@ const ACTIVITY_LOG = [
 ]
 
 export function PharmacyDashboard({ section }: { section: string }) {
-  const [prescriptions, setPrescriptions] = useState(PRESCRIPTIONS)
-  const [inventory, setInventory] = useState(MEDICINE_INVENTORY)
+  const [prescriptions, setPrescriptions] = useState<any[]>([])
+  const [inventory, setInventory] = useState<any[]>([])
+  const [activityLogs, setActivityLogs] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchQ, setSearchQ] = useState("")
   const [activeRackHover, setActiveRackHover] = useState<string | null>(null)
 
@@ -35,8 +38,26 @@ export function PharmacyDashboard({ section }: { section: string }) {
   const [weatherTelemetry, setWeatherTelemetry] = useState<any>(null)
   const [aiInsightsList, setAiInsightsList] = useState<any[]>([])
   const [apiLoading, setApiLoading] = useState(true)
+  const [selectedMedicine, setSelectedMedicine] = useState<any>(null)
 
   // ─── LIVE FETCHING CRITERIA FROM BACKEND API ───
+  const fetchDashboard = async () => {
+    try {
+      const res = await fetch("/api/pharmacy/dashboard")
+      const data = await res.json()
+      console.log("Inventory Data");
+      console.log(data.inventory);
+      console.log(data.prescriptions);
+      setPrescriptions(data.prescriptions || [])
+      setInventory(data.inventory || [])
+      setActivityLogs(data.activity || [])
+    } catch (err) {
+      console.log(err)
+    } finally {
+      setLoading(false)
+    }
+  };
+
   const fetchLiveAIPredictions = async () => {
     try {
       const res = await fetch('/api/pharmacy/weather?city=Surat')
@@ -68,36 +89,80 @@ export function PharmacyDashboard({ section }: { section: string }) {
   }
 
   useEffect(() => {
+    fetchDashboard()
     fetchLiveAIPredictions()
   }, [])
 
-  const handlePrepareRx = (rxId: string) => {
-    setPrescriptions(
-      prescriptions.map((p) =>
-        p.id === rxId ? { ...p, status: "Being Prepared" } : p
-      ),
-    )
-  }
 
-  const handleDispenseRx = (rxId: string) => {
-    setPrescriptions(
-      prescriptions.map((p) =>
-        p.id === rxId ? { ...p, status: "Dispensed" } : p
-      ),
-    )
-  }
+const handlePrepareRx = (id:number)=>{
 
-  const handleMarkReady = (rxId: string) => {
-    setPrescriptions(
-      prescriptions.map((p) =>
-        p.id === rxId ? { ...p, status: "Ready for Pickup" } : p
-      ),
-    )
-  }
+setPrescriptions(
 
-  const readyCount = prescriptions.filter((p) => p.status === "Dispensed" || p.status === "Ready for Pickup").length
-  const lowStockCount = inventory.filter((m) => m.stock > 0 && m.stock <= m.reorder / 2).length
-  const outOfStockCount = inventory.filter((m) => m.stock === 0).length
+prescriptions.map((p)=>
+
+p.prescription_id===id
+
+? {...p,order_status:"Being Prepared"}
+
+:p
+
+)
+
+)
+
+}
+
+  const handleDispenseRx=(id:number)=>{
+
+setPrescriptions(
+
+prescriptions.map((p)=>
+
+p.prescription_id===id
+
+? {...p,order_status:"Dispensed"}
+
+:p
+
+)
+
+)
+
+}
+
+const handleMarkReady=(id:number)=>{
+
+setPrescriptions(
+
+prescriptions.map((p)=>
+
+p.prescription_id===id
+
+? {...p,order_status:"Ready"}
+
+:p
+
+)
+
+)
+
+}
+
+  const readyCount = (prescriptions ?? []).filter(
+    (p) =>
+      p.order_status === "Ready" ||
+      p.order_status === "Dispensed"
+  ).length;
+
+  const lowStockCount = (inventory ?? []).filter(
+    (m) =>
+      m.current_stock > 0 &&
+      m.current_stock <= m.reorder_level
+  ).length;
+
+  const outOfStockCount = (inventory ?? []).filter(
+    (m) => m.current_stock === 0
+  ).length;
 
   /* =========================================================================
       SECTION 1: UNIFIED PHARMACY DASHBOARD (MERGED WORKSPACE)
@@ -127,7 +192,7 @@ export function PharmacyDashboard({ section }: { section: string }) {
 
         {/* Live Tracking Split Workspace */}
         <div className="grid gap-4 lg:grid-cols-3">
-          
+
           <div className="rounded-lg border border-border bg-card p-4 lg:col-span-2 space-y-3">
             <div className="flex items-center justify-between border-b border-border pb-2">
               <div className="flex items-center gap-2">
@@ -145,65 +210,75 @@ export function PharmacyDashboard({ section }: { section: string }) {
 
             <div className="space-y-2.5 overflow-y-auto pr-1" style={{ maxHeight: 380 }}>
               {prescriptions
-                .filter(
-                  (p) =>
-                    p.patientName.toLowerCase().includes(searchQ.toLowerCase()) ||
-                    p.medicines.some((m) => m.toLowerCase().includes(searchQ.toLowerCase()))
-                )
-                .map((p) => (
-                  <div key={p.id} className="rounded-lg border border-border bg-secondary/20 p-3 text-xs transition hover:bg-secondary/40">
+               .filter((p) => {
+  const name = p.full_name ?? "";
+  const medicines = p.medicines ?? "";
+
+  return (
+    name.toLowerCase().includes(searchQ.toLowerCase()) ||
+    medicines.toLowerCase().includes(searchQ.toLowerCase())
+  );
+})
+                .map((p, index) => (
+  <div
+    key={`${p.id ?? p.prescription_id ?? "item"}-${index}`}
+    className="rounded-lg border border-border bg-secondary/20 p-3"
+  >
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0 flex-1">
-                        <p className="font-semibold text-sm text-foreground">{p.patientName}</p>
-                        <p className="text-muted-foreground text-[11px] mt-0.5">{p.doctorName}</p>
+                        <p className="font-semibold text-sm text-foreground">{p.full_name}</p>
+                        <p className="text-muted-foreground text-[11px] mt-0.5">{p.doctor_name}</p>
                         <div className="mt-2 flex flex-wrap gap-1">
-                          {p.medicines.map((med, i) => (
-                            <span key={i} className="rounded-sm bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
-                              {med}
+                          {(p.medicines ?? "").split(",").map((med: string, i: number) => (
+                            <span
+                              key={i}
+                              className="rounded-sm bg-primary/10 px-1.5 py-0.5 font-medium text-primary"
+                            >
+                              {med.trim()}
                             </span>
                           ))}
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center gap-2 shrink-0">
-                        {p.status === "New" && (
+                        {p.order_status === "New" && (
                           <>
                             <span className="font-semibold text-primary">New Order</span>
                             <button
-                              onClick={() => handlePrepareRx(p.id)}
+                              onClick={() => handlePrepareRx(p.prescription_id)}
                               className="rounded-md bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary hover:bg-primary/20"
                             >
                               Prepare
                             </button>
                           </>
                         )}
-                        {p.status === "Being Prepared" && (
+                        {p.order_status === "Being Prepared" && (
                           <>
                             <span className="flex items-center gap-1 font-semibold text-blue-600">
                               <Clock className="h-3 w-3 animate-spin" /> Packaging
                             </span>
                             <button
-                              onClick={() => handleMarkReady(p.id)}
+                              onClick={() => handleMarkReady(p.prescription_id)}
                               className="rounded-md bg-success/10 px-2.5 py-1 text-[11px] font-medium text-success hover:bg-success/20"
                             >
                               Ready
                             </button>
                           </>
                         )}
-                        {p.status === "Ready for Pickup" && (
+                        {p.order_status === "Ready for Pickup" && (
                           <>
                             <span className="flex items-center gap-1 font-semibold text-success">
                               <CheckCircle className="h-3 w-3" /> Waiting at Counter
                             </span>
                             <button
-                              onClick={() => handleDispenseRx(p.id)}
+                              onClick={() => handleDispenseRx(p.prescription_id)}
                               className="rounded-md bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary hover:bg-primary/20"
                             >
                               Dispense (Hand Over)
                             </button>
                           </>
                         )}
-                        {p.status === "Dispensed" && (
+                        {p.order_status === "Dispensed" && (
                           <span className="flex items-center gap-1 font-semibold text-success/80 bg-success/5 border border-success/10 rounded-full px-2 py-0.5">
                             <CheckCircle className="h-3 w-3" /> Medicine Handed Over
                           </span>
@@ -218,10 +293,11 @@ export function PharmacyDashboard({ section }: { section: string }) {
           <div className="rounded-lg border border-border bg-card p-4 h-fit">
             <h3 className="text-sm font-semibold text-foreground border-b border-border pb-2">Recent Activity Log</h3>
             <div className="mt-3 space-y-2.5">
-              {ACTIVITY_LOG.map((log) => (
-                <div key={log.id} className="flex flex-col gap-1 border-l-2 border-primary/30 bg-secondary/30 px-3 py-1.5 rounded-r-md">
+            
+              {activityLogs.map((log)=>(
+                <div key={log.activity_id} className="flex flex-col gap-1 border-l-2 border-primary/30 bg-secondary/30 px-3 py-1.5 rounded-r-md">
                   <span className="shrink-0 text-[10px] font-mono text-muted-foreground">{log.time}</span>
-                  <p className="text-xs text-foreground/80 font-medium leading-normal">{log.action}</p>
+                  <p className="text-xs text-foreground/80 font-medium leading-normal">{log.description}</p>
                 </div>
               ))}
             </div>
@@ -236,11 +312,11 @@ export function PharmacyDashboard({ section }: { section: string }) {
       SECTION 2: MERGED INVENTORY & CRITICAL STOCK ALERTS MODULE
       ========================================================================= */
   if (section === "inventory" || section === "alerts") {
-    const activeAlerts = inventory.filter((m) => m.stock === 0 || m.stock <= m.reorder / 2)
+    const activeAlerts = inventory.filter((m) => m.current_stock === 0 || m.current_stock <= m.reorder_level / 2)
 
     return (
       <div className="space-y-4">
-        
+
         {/* High-Visibility Real-Time Critical Stock Alerts Banner Row */}
         {activeAlerts.length > 0 && (
           <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4">
@@ -250,15 +326,15 @@ export function PharmacyDashboard({ section }: { section: string }) {
             </div>
             <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto">
               {activeAlerts.map((m, idx) => (
-                <div 
-                  key={idx} 
+                <div
+                  key={idx}
                   className={cn(
                     "rounded px-2.5 py-1 text-[11px] font-medium border flex items-center gap-2",
-                    m.stock === 0 ? "bg-destructive/10 text-destructive border-destructive/20" : "bg-warning/10 text-warning border-warning/20"
+                    m.current_stock === 0 ? "bg-destructive/10 text-destructive border-destructive/20" : "bg-warning/10 text-warning border-warning/20"
                   )}
                 >
-                  <span className="font-bold">{m.name}</span>
-                  <span className="opacity-70">({m.stock === 0 ? "Out of stock" : `Low: ${m.stock} left`})</span>
+                  <span className="font-bold">{m.medicine_name}</span>
+                  <span className="opacity-70">({m.current_stock === 0 ? "Out of stock" : `Low: ${m.current_stock} left`})</span>
                 </div>
               ))}
             </div>
@@ -267,7 +343,7 @@ export function PharmacyDashboard({ section }: { section: string }) {
 
         {/* Master Inventory Table Layout System */}
         <div className="grid gap-4 lg:grid-cols-3">
-          
+
           <div className="rounded-lg border border-border bg-card p-4 lg:col-span-2">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-foreground">Integrated Master Inventory Database</h3>
@@ -293,40 +369,43 @@ export function PharmacyDashboard({ section }: { section: string }) {
                 <tbody>
                   {inventory
                     .filter((m) =>
-                      m.name.toLowerCase().includes(searchQ.toLowerCase()),
+                      m.medicine_name.toLowerCase().includes(searchQ.toLowerCase()),
                     )
                     .map((m, idx) => {
                       let statusBg = "bg-success/10 text-success"
-                      if (m.stock === 0) statusBg = "bg-destructive/10 text-destructive"
-                      else if (m.stock <= m.reorder / 2) statusBg = "bg-warning/10 text-warning"
-
-                      const rackId = m.rack ? `Rack-${m.rack}` : null
+                      if (m.current_stock === 0) statusBg = "bg-destructive/10 text-destructive"
+                      else if (m.current_stock <= m.reorder_level / 2) statusBg = "bg-warning/10 text-warning"
 
                       return (
                         <tr
                           key={idx}
-                          onMouseEnter={() => rackId && setActiveRackHover(rackId)}
-                          onMouseLeave={() => setActiveRackHover(null)}
+                          onClick={() => {
+                            setSelectedMedicine(m)
+                            const rack = `Rack-${m.rack_location.split("-")[0]}`
+                            setActiveRackHover(rack)
+                          }}
                           className={cn(
-                            "border-b border-border/50 transition duration-150",
-                            rackId && activeRackHover === rackId ? "bg-primary/5" : "hover:bg-secondary/30"
+                            "cursor-pointer border-b border-border/50 transition duration-150",
+                            activeRackHover === m.rack_location
+                              ? "bg-primary/10"
+                              : "hover:bg-secondary/30"
                           )}
                         >
-                          <td className="px-3 py-2 font-medium text-foreground">{m.name}</td>
+                          <td className="px-3 py-2 font-medium text-foreground">{m.medicine_name}</td>
                           <td className="px-3 py-2 font-mono text-muted-foreground">
-                            {m.stock} / {m.reorder}
+                            {m.current_stock} / {m.reorder_level}
                           </td>
                           <td className="px-3 py-2">
                             <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", statusBg)}>
-                              {m.stock === 0 && "Out of Stock"}
-                              {m.stock > 0 && m.stock <= m.reorder / 2 && "Low Stock"}
-                              {m.stock > m.reorder / 2 && "Healthy"}
+                              {m.current_stock === 0 && "Out of Stock"}
+                              {m.current_stock > 0 && m.current_stock <= m.reorder_level / 2 && "Low Stock"}
+                              {m.current_stock > m.reorder_level / 2 && "Healthy"}
                             </span>
                           </td>
                           <td className="px-3 py-2 text-muted-foreground font-bold text-primary">
-                            {m.rack && m.shelf && m.boxNumber ? `${m.rack}-${m.shelf}-${m.boxNumber}` : "-"}
+                            {m.rack_location}
                           </td>
-                          <td className="px-3 py-2 text-muted-foreground">{m.expiryDate}</td>
+                          <td className="px-3 py-2 text-muted-foreground">{m.expiry_date}</td>
                         </tr>
                       )
                     })}
@@ -345,15 +424,15 @@ export function PharmacyDashboard({ section }: { section: string }) {
               Hover over an inventory list record to highlight its designated custom row coordinate box configuration below.
             </p>
             <div className="grid grid-cols-2 gap-3">
-              {["Rack-A", "Rack-B", "Rack-C", "Rack-D"].map((rack) => {
+              {["Rack-A", "Rack-B", "Rack-C", "Rack-D", "Rack-E"].map((rack) => {
                 const isMatch = activeRackHover === rack
                 return (
                   <div
                     key={rack}
                     className={cn(
                       "flex flex-col items-center justify-center p-5 rounded-lg border text-center transition-all duration-300",
-                      isMatch 
-                        ? "border-primary bg-primary/10 scale-105 shadow-[0_0_12px_rgba(59,130,246,0.2)]" 
+                      isMatch
+                        ? "border-primary bg-primary/10 scale-105 shadow-[0_0_12px_rgba(59,130,246,0.2)]"
                         : "border-border bg-secondary/30"
                     )}
                   >
@@ -365,9 +444,31 @@ export function PharmacyDashboard({ section }: { section: string }) {
                       <div className="h-2 rounded-sm bg-muted/40" />
                       <div className="h-2 rounded-sm bg-muted/40" />
                     </div>
-                    <span className="text-[10px] text-muted-foreground mt-2 uppercase tracking-widest font-medium">
-                      {isMatch ? "Located 🎯" : "Storage"}
-                    </span>
+                    <div className="mt-3 flex flex-col items-center gap-1">
+                      {isMatch ? (
+                        <>
+                          <div className="text-sm font-bold text-primary">
+                            📦 {selectedMedicine?.medicine_name}
+                          </div>
+                          <div className="text-xs">
+                            📍 {selectedMedicine?.rack_location}
+                          </div>
+                          <div className="text-xs">
+                            Stock : {selectedMedicine?.current_stock}
+                          </div>
+                          <div className="text-xs">
+                            Expiry : {selectedMedicine?.expiry_date}
+                          </div>
+                          <div className="mt-2 rounded bg-green-100 px-2 py-1 text-green-700 text-xs font-semibold">
+                            Located Here
+                          </div>
+                        </>
+                      ) : (
+                        <span className="text-[10px] text-muted-foreground uppercase">
+                          Storage
+                        </span>
+                      )}
+                    </div>
                   </div>
                 )
               })}
@@ -379,92 +480,90 @@ export function PharmacyDashboard({ section }: { section: string }) {
     )
   }
 
- /* =========================================================================
-    SECTION 3: AI ENVIRONMENTAL DEMAND PREDICTIONS CONSOLE
-   ========================================================================= */
-return (
-  <div className="space-y-4">
-    {/* Real-Time Environmental External Synced Node Widget */}
-    <div className="rounded-lg border border-primary/25 bg-primary/5 p-4 flex items-center justify-between gap-4">
-      <div className="space-y-1">
-        <div className="flex items-center gap-2 text-primary">
-          <CloudLightning className="h-5 w-5 animate-bounce" />
-          <span className="text-sm font-bold tracking-wide">AI Live Weather Intelligence Node</span>
+  /* =========================================================================
+      SECTION 3: AI ENVIRONMENTAL DEMAND PREDICTIONS CONSOLE
+      ========================================================================= */
+  return (
+    <div className="space-y-4">
+      {/* Real-Time Environmental External Synced Node Widget */}
+      <div className="rounded-lg border border-primary/25 bg-primary/5 p-4 flex items-center justify-between gap-4">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 text-primary">
+            <CloudLightning className="h-5 w-5 animate-bounce" />
+            <span className="text-sm font-bold tracking-wide">AI Live Weather Intelligence Node</span>
+          </div>
+          <p className="text-xs text-foreground/80 font-medium">
+            Current Environment: <span className="font-bold text-primary">
+              {weatherTelemetry
+                ? `${weatherTelemetry.city}: ${weatherTelemetry.temperature}°C, Humidity ${weatherTelemetry.humidity}% (${weatherTelemetry.apiRawCondition})`
+                : "Synchronizing Regional Meteorological Telemetry..."
+              }
+            </span>
+          </p>
+          <p className="text-[11px] font-bold text-amber-600 animate-pulse mt-1">
+            🌍 Active Framework State: {weatherTelemetry?.condition || "Detecting Cloud Analytics..."}
+          </p>
         </div>
-        <p className="text-xs text-foreground/80 font-medium">
-          Current Environment: <span className="font-bold text-primary">
-            {weatherTelemetry 
-              ? `${weatherTelemetry.city}: ${weatherTelemetry.temperature}°C, Humidity ${weatherTelemetry.humidity}% (${weatherTelemetry.apiRawCondition})`
-              : "Synchronizing Regional Meteorological Telemetry..."
-            }
-          </span>
-        </p>
-        <p className="text-[11px] font-bold text-amber-600 animate-pulse mt-1">
-          🌍 Active Framework State: {weatherTelemetry?.condition || "Detecting Cloud Analytics..."}
-        </p>
+        <div className="rounded-full bg-primary/20 text-primary border border-primary/30 px-2 py-0.5 text-xs font-semibold shrink-0 hidden sm:inline-flex">
+          {apiLoading ? <RefreshCw className="h-3 w-3 animate-spin mr-1" /> : null}
+          Sync Status: Operational
+        </div>
       </div>
-      <div className="rounded-full bg-primary/20 text-primary border border-primary/30 px-2 py-0.5 text-xs font-semibold shrink-0 hidden sm:inline-flex">
-        {apiLoading ? <RefreshCw className="h-3 w-3 animate-spin mr-1" /> : null}
-        Sync Status: Operational
-      </div>
-    </div>
 
-    {/* SECTION 3: AI ENVIRONMENTAL DEMAND PREDICTIONS CONSOLE */}
-    <div className="rounded-lg border border-border bg-card p-4">
-      <h3 className="text-sm font-semibold text-foreground">AI Medicine Demand Predictions</h3>
-      <p className="mt-1 text-xs text-muted-foreground">Powered by seasonal patterns & weather trends</p>
-      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {aiInsightsList.map((insight, idx) => {
-          const title = insight.medicine_name || "Unknown Medicine Asset";
-          const recommendation = insight.ai_insight_message || "Stock Verified - Stable Demand Channel.";
-          const boostUnits = insight.ai_recommended_boost || 0;
-          const disease = insight.predicted_outbreak_disease || "General Outbreak";
-          
-          const priority = boostUnits > 45 ? "high" : boostUnits > 0 ? "medium" : "low";
+      <div className="rounded-lg border border-border bg-card p-4">
+        <h3 className="text-sm font-semibold text-foreground">AI Medicine Demand Predictions</h3>
+        <p className="mt-1 text-xs text-muted-foreground">Powered by seasonal patterns & weather trends</p>
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {aiInsightsList.map((insight, idx) => {
+            const title = insight.medicine_name || "Unknown Medicine Asset";
+            const recommendation = insight.ai_insight_message || "Stock Verified - Stable Demand Channel.";
+            const boostUnits = insight.ai_recommended_boost || 0;
+            const disease = insight.predicted_outbreak_disease || "General Outbreak";
 
-          // 🔥 FIXED: Absolute Dynamic Outbreak Mappings System!
-          const description = (disease && disease !== "None" && disease !== "General Outbreak")
-            ? `Risk Indication Matrix: High threat of ${disease} in local sectors.`
-            : "Chronic Clinical Maintenance & Baseline Balance State.";
+            const priority = boostUnits > 45 ? "high" : boostUnits > 0 ? "medium" : "low";
 
-          return (
-            <div
-              key={idx}
-              className={cn(
-                "rounded-lg border p-3",
-                priority === "high"
-                  ? "border-destructive/30 bg-destructive/5"
-                  : priority === "medium"
-                    ? "border-warning/30 bg-warning/5"
-                    : "border-primary/30 bg-primary/5"
-              )}
-            >
-              <div className="flex items-start gap-3">
-                <div className="shrink-0">
-                  {priority === "high" && <AlertTriangle className="h-5 w-5 text-destructive" />}
-                  {priority === "medium" && <AlertCircle className="h-5 w-5 text-warning" />}
-                  {priority === "low" && <Pill className="h-5 w-5 text-primary" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="font-semibold text-foreground truncate text-sm">{title}</p>
-                    {boostUnits > 0 && (
-                      <span className="text-[9px] font-bold uppercase bg-destructive text-destructive-foreground px-1.5 py-0.5 rounded tracking-wider shrink-0 animate-pulse">
-                        +{boostUnits} Units
-                      </span>
-                    )}
+            const description = (disease && disease !== "None" && disease !== "General Outbreak")
+              ? `Risk Indication Matrix: High threat of ${disease} in local sectors.`
+              : "Chronic Clinical Maintenance & Baseline Balance State.";
+
+            return (
+              <div
+                key={idx}
+                className={cn(
+                  "rounded-lg border p-3",
+                  priority === "high"
+                    ? "border-destructive/30 bg-destructive/5"
+                    : priority === "medium"
+                      ? "border-warning/30 bg-warning/5"
+                      : "border-primary/30 bg-primary/5"
+                )}
+              >
+                <div className="flex items-start gap-3">
+                  <div className="shrink-0">
+                    {priority === "high" && <AlertTriangle className="h-5 w-5 text-destructive" />}
+                    {priority === "medium" && <AlertCircle className="h-5 w-5 text-warning" />}
+                    {priority === "low" && <Pill className="h-5 w-5 text-primary" />}
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">{description}</p>
-                  <div className="mt-2 rounded-md bg-secondary/30 px-2 py-1.5">
-                    <p className="text-xs font-medium text-foreground">💡 {recommendation}</p>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-semibold text-foreground truncate text-sm">{title}</p>
+                      {boostUnits > 0 && (
+                        <span className="text-[9px] font-bold uppercase bg-destructive text-destructive-foreground px-1.5 py-0.5 rounded tracking-wider shrink-0 animate-pulse">
+                          +{boostUnits} Units
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+                    <div className="mt-2 rounded-md bg-secondary/30 px-2 py-1.5">
+                      <p className="text-xs font-medium text-foreground">💡 {recommendation}</p>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
 }

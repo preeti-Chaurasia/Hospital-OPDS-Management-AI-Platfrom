@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+
 import {
   AlertCircle,
   CheckCircle,
@@ -19,17 +20,30 @@ import {
   UploadCloud,
   FileText
 } from "lucide-react"
-import {
-  STAFF_REGISTRATIONS,
-  QUEUE_ENTRIES,
-  LAB_TESTS,
-  ADMISSION_REQUESTS,
-  PRIORITY_STYLES,
-  getVitalsRecommendations,
-  type LabTest,
-  type PatientVitals,
-} from "@/lib/medical-data"
+import { type PatientVitals } from "@/lib/medical-data"
 import { cn } from "@/lib/utils"
+
+const PRIORITY_STYLES = {
+  emergency: {
+    cls: "bg-red-100 text-red-700 border-red-300",
+    label: "Emergency",
+  },
+
+  urgent: {
+    cls: "bg-yellow-100 text-yellow-700 border-yellow-300",
+    label: "Urgent",
+  },
+
+  stable: {
+    cls: "bg-green-100 text-green-700 border-green-300",
+    label: "Stable",
+  },
+
+  routine: {
+    cls: "bg-blue-100 text-blue-700 border-blue-300",
+    label: "Routine",
+  },
+}
 
 const NOTIFICATION_ITEMS = [
   { id: 1, time: "09:45 AM", msg: "Dr. Shaw admitted Marcus Delgado to ICU-01", type: "admission" },
@@ -38,13 +52,38 @@ const NOTIFICATION_ITEMS = [
   { id: 4, time: "09:00 AM", msg: "Bed ICU-03 now available for allocation", type: "bed" },
 ]
 
+
 export function StaffDashboard({ section }: { section: string }) {
-  const [registrations, setRegistrations] = useState(STAFF_REGISTRATIONS)
-  const [queueEntries, setQueueEntries] = useState(QUEUE_ENTRIES)
-  const [labTests, setLabTests] = useState(LAB_TESTS)
+const [registrations, setRegistrations] = useState<any[]>([])
+  const [dashboardData, setDashboardData] = useState<any>(null)
+const [queueEntries, setQueueEntries] = useState<any[]>([])
+const [labTests, setLabTests] = useState<any[]>([])
+
   const [searchQ, setSearchQ] = useState("")
   const [expandedLabTest, setExpandedLabTest] = useState<string | null>(null)
+  const [loading,setLoading]=useState(true)
   const [labRemarks, setLabRemarks] = useState<Record<string, string>>({})
+useEffect(()=>{
+   fetchDashboard()
+},[])
+async function fetchDashboard() {
+  try {
+    const res = await fetch("/api/staff/dashboard")
+
+    const data = await res.json()
+
+   setDashboardData(data)
+
+setQueueEntries(data.queue || [])
+
+setLabTests(data.labTests || [])
+  } catch (err) {
+    console.error(err)
+  } finally {
+    setLoading(false)
+  }
+}
+
   
   const [newPatientForm, setNewPatientForm] = useState({
     name: "",
@@ -70,9 +109,10 @@ export function StaffDashboard({ section }: { section: string }) {
       const nextTokenNum = 122 + queueEntries.length
       const tokenGenerated = `A-${nextTokenNum}`
 
+      
       // 1. Add to registration history database tracking block
       const newReg = {
-        id: `sr-${registrations.length + 1}`,
+        id: `sr-${dashboardData?.stats?.todaysPatients + 1}`,
         name: newPatientForm.name,
         age: parseInt(newPatientForm.age),
         sex: newPatientForm.sex,
@@ -110,6 +150,13 @@ export function StaffDashboard({ section }: { section: string }) {
   }
   
   // FIXED TYPO HERE: Changed "NewPatientForm" to "setNewPatientForm"
+  function getVitalsRecommendations(
+  age: number,
+  sex: string,
+  complaint: string
+) {
+  return []
+}
   const handleComplaintChange = (complaint: string) => {
     setNewPatientForm({ ...newPatientForm, complaint })
     if (newPatientForm.age) {
@@ -125,17 +172,17 @@ export function StaffDashboard({ section }: { section: string }) {
   const handleLabReportReady = (testId: string, filename: string) => {
     setLabTests(
       labTests.map((t) =>
-        t.id === testId
+        t.report_id === testId
           ? { ...t, status: "Ready", reportFile: filename || "clinical_report.pdf" }
           : t
       ),
     )
   }
 
-  const handleConsultationCheckIn = (queueId: string) => {
+ const handleConsultationCheckIn = (queueId: number) => {
     setQueueEntries(
-      queueEntries.map((q) =>
-        q.id === queueId ? { ...q, status: "In Consultation" } : q
+      queueEntries.map((q:any) =>
+        q.appointment_id === queueId ? { ...q, status: "In Consultation" } : q
       ),
     )
   }
@@ -149,10 +196,10 @@ export function StaffDashboard({ section }: { section: string }) {
         {/* Core Counting Matrix Headers */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
-            { label: "Today's Walk-ins", value: registrations.length, color: "text-primary border-primary/20 bg-primary/5" },
-            { label: "Live Queue Line", value: queueEntries.filter((q) => q.status === "In Queue").length, color: "text-success border-success/20 bg-success/5" },
-            { label: "Pending Diagnostics", value: labTests.filter((t) => t.status !== "Ready").length, color: "text-warning border-warning/20 bg-warning/5" },
-            { label: "Uploaded Records Today", value: labTests.filter((t) => t.status === "Ready").length, color: "text-primary border-primary/20 bg-primary/5" },
+            { label: "Today's Walk-ins", value: dashboardData?.stats?.todaysPatients, color: "text-primary border-primary/20 bg-primary/5" },
+            { label: "Live Queue Line",value: dashboardData?.stats?.liveQueue || 0, color: "text-success border-success/20 bg-success/5" },
+            { label: "Pending Diagnostics", value: dashboardData?.stats?.pendingDiagnostics || 0, color: "text-warning border-warning/20 bg-warning/5" },
+            { label: "Uploaded Records Today", value: dashboardData?.stats?.pendingDiagnostics || 0, color: "text-primary border-primary/20 bg-primary/5" },
           ].map((stat) => (
             <div key={stat.label} className="rounded-lg border border-border bg-card p-3 sm:p-4 shadow-sm">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{stat.label}</p>
@@ -182,18 +229,26 @@ export function StaffDashboard({ section }: { section: string }) {
 
             <div className="mt-3 space-y-2 max-h-[360px] overflow-y-auto pr-1">
               {queueEntries
-                .filter((q) => q.patientName && q.patientName.toLowerCase().includes(searchQ.toLowerCase()))
-                .map((q) => {
-                  const prio = PRIORITY_STYLES[q.priority] || { cls: "bg-primary/10 text-primary", label: "Routine" }
+                ?.filter((q) => q.full_name && q.full_name.toLowerCase().includes(searchQ.toLowerCase()))
+                ?.map((q) => {
+                const prio =
+PRIORITY_STYLES[
+(q.age > 60 ||
+q.chief_complaint?.toLowerCase().includes("chest"))
+? "emergency"
+: "stable"
+] || { cls: "bg-primary/10 text-primary", label: "Routine" }
                   return (
-                    <div key={q.id} className="flex flex-col gap-2 rounded-lg border border-border bg-secondary/20 p-3 sm:flex-row sm:items-center sm:justify-between transition hover:bg-secondary/40">
+                    <div key={q.appointment_id} className="flex flex-col gap-2 rounded-lg border border-border bg-secondary/20 p-3 sm:flex-row sm:items-center sm:justify-between transition hover:bg-secondary/40">
                       <div className="flex items-center gap-3">
                         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-sm font-bold text-primary font-mono">
-                          {q.token}
+                          {q.token_number}
                         </span>
                         <div className="min-w-0 flex-1">
-                          <p className="font-semibold text-sm text-foreground">{q.patientName}</p>
-                          <p className="text-[11px] text-muted-foreground mt-0.5">Checked-in: {q.registeredTime}</p>
+                          <p className="font-semibold text-sm text-foreground">{q.full_name}</p>
+                         <p className="text-[11px] text-muted-foreground">
+    Estimated Wait : {q.estimated_wait} min
+</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
@@ -202,7 +257,7 @@ export function StaffDashboard({ section }: { section: string }) {
                         </span>
                         {q.status === "In Queue" ? (
                           <button
-                            onClick={() => handleConsultationCheckIn(q.id)}
+                            onClick={() => handleConsultationCheckIn(q.appointment_id)}
                             className="rounded-md bg-success/10 px-2.5 py-1 text-[11px] font-semibold text-success border border-success/20 hover:bg-success/20"
                           >
                             Send to Cabin
@@ -221,10 +276,10 @@ export function StaffDashboard({ section }: { section: string }) {
           <div className="rounded-lg border border-border bg-card p-4 h-fit shadow-sm">
             <h3 className="text-sm font-semibold text-foreground border-b border-border pb-2">Live Clinical Stream</h3>
             <div className="mt-3 space-y-2.5">
-              {NOTIFICATION_ITEMS.map((n) => (
-                <div key={n.id} className="flex flex-col gap-1 border-l-2 border-primary/30 bg-secondary/30 px-3 py-1.5 rounded-r-md">
-                  <span className="shrink-0 text-[10px] font-mono text-muted-foreground">{n.time}</span>
-                  <p className="text-xs text-foreground/80 font-medium leading-normal">{n.msg}</p>
+              {dashboardData?.activity?.map((n:any)=>(
+                <div key={n.activity_id} className="flex flex-col gap-1 border-l-2 border-primary/30 bg-secondary/30 px-3 py-1.5 rounded-r-md">
+                  <span className="shrink-0 text-[10px] font-mono text-muted-foreground">{new Date(n.created_at).toLocaleTimeString()}</span>
+                  <p className="text-xs text-foreground/80 font-medium leading-normal">{`${n.activity_type} by ${n.performed_by} (${n.role}) - ${n.full_name}`}</p>
                 </div>
               ))}
             </div>
@@ -377,23 +432,18 @@ export function StaffDashboard({ section }: { section: string }) {
           </div>
 
           <div className="space-y-3">
-            {labTests.map((t) => (
-              <div key={t.id} className="rounded-lg border border-border bg-secondary/20 p-4 transition hover:bg-secondary/30">
+            {labTests.map((t:any) => (
+              <div key={t.report_id} className="rounded-lg border border-border bg-secondary/20 p-4 transition hover:bg-secondary/30">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-bold text-sm text-foreground">{t.patientName}</p>
+                      <p className="font-bold text-sm text-foreground">{t.full_name}</p>
                       <span className="text-[11px] font-mono text-primary bg-primary/10 px-2 py-0.5 rounded font-bold">Token Attached</span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Ordered Investigation: <span className="font-semibold text-foreground">{t.testType}</span> · Required By: <span className="font-medium text-foreground">{t.requestedBy}</span>
+                      Ordered Investigation: <span className="font-semibold text-foreground">{t.report_name}</span> · Required By: <span className="font-medium text-foreground">{t.doctor_name}</span>
                     </p>
-                    {t.reportFile && (
-                      <div className="mt-2 inline-flex items-center gap-1.5 text-xs text-success font-medium bg-success/5 border border-success/10 rounded px-2 py-1">
-                        <span>📎 Linked Secure File:</span>
-                        <span className="font-mono text-[11px] underline">{t.reportFile}</span>
-                      </div>
-                    )}
+          
                   </div>
 
                   <div className="flex items-center gap-3 shrink-0">
@@ -406,16 +456,16 @@ export function StaffDashboard({ section }: { section: string }) {
                     </span>
                     
                     <button
-                      onClick={() => setExpandedLabTest(expandedLabTest === t.id ? null : t.id)}
+                      onClick={() => setExpandedLabTest(expandedLabTest === t.report_id ? null : t.report_id)}
                       className="rounded-md border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-accent transition"
                     >
-                      {expandedLabTest === t.id ? "Close Panel" : "Upload & Review"}
+                      {expandedLabTest === t.report_id ? "Close Panel" : "Upload & Review"}
                     </button>
                   </div>
                 </div>
 
                 {/* Secure Laboratory Document Attachment Node Form */}
-                {expandedLabTest === t.id && (
+                {expandedLabTest === t.report_id && (
                   <div className="mt-4 border-t border-border pt-3 space-y-3 bg-card p-3 rounded-lg border border-border/50 animate-fade-in">
                     <div className="flex flex-col gap-1.5">
                       <div className="flex items-center gap-1 text-xs font-bold text-foreground">
@@ -426,7 +476,7 @@ export function StaffDashboard({ section }: { section: string }) {
                         type="text"
                         placeholder="e.g., blood_test_cbc_results_77a.pdf"
                         defaultValue={t.reportFile || ""}
-                        id={`file_input_${t.id}`}
+                        id={`file_input_${t.report_id}`}
                         className="w-full rounded-md border border-border bg-secondary px-3 py-2 text-xs text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary"
                       />
                     </div>
@@ -435,16 +485,16 @@ export function StaffDashboard({ section }: { section: string }) {
                       <label className="text-xs font-bold text-foreground">Pathology Lab Notes / Remarks</label>
                       <textarea
                         placeholder="Type laboratory findings, normal/abnormal margins, or diagnostic impressions here..."
-                        value={labRemarks[t.id] || ""}
-                        onChange={(e) => setLabRemarks({ ...labRemarks, [t.id]: e.target.value })}
+                        value={labRemarks[t.report_id] || ""}
+                        onChange={(e) => setLabRemarks({ ...labRemarks, [t.report_id]: e.target.value })}
                         className="h-16 w-full rounded-md border border-border bg-secondary px-3 py-2 text-xs text-foreground placeholder-muted-foreground resize-none focus:outline-none focus:border-primary"
                       />
                     </div>
 
                     <button
                       onClick={() => {
-                        const inputEl = document.getElementById(`file_input_${t.id}`) as HTMLInputElement;
-                        handleLabReportReady(t.id, inputEl?.value);
+                        const inputEl = document.getElementById(`file_input_${t.report_id}`) as HTMLInputElement;
+                        handleLabReportReady(t.report_id, inputEl?.value);
                         setExpandedLabTest(null);
                       }}
                       className="w-full rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90 transition"

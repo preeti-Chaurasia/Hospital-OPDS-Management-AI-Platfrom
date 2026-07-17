@@ -2,12 +2,33 @@
 import { Pool } from 'pg';
 
 // Initialize pool configuration automatically using the string from your .env.local
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false // Required safely for serverless Neon database pooling connections
-  }
-});
+const globalForPg = global as unknown as {
+  pool?: Pool;
+};
+
+export const pool =
+  globalForPg.pool ??
+  new Pool({
+
+    connectionString: process.env.DATABASE_URL,
+
+    ssl:{
+      rejectUnauthorized:false
+    },
+
+    max:3,
+
+    idleTimeoutMillis:60000,
+
+    connectionTimeoutMillis:20000,
+
+    keepAlive:true,
+
+  });
+  
+if (process.env.NODE_ENV !== "production") {
+  globalForPg.pool = pool;
+}
 
 export const db = {
   /**
