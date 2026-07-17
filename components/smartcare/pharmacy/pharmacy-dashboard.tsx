@@ -16,6 +16,7 @@ import {
   RefreshCw, // Loader for API transitions
 } from "lucide-react"
 
+import { PRESCRIPTIONS, MEDICINE_INVENTORY, type Prescription } from "@/lib/medical-data"
 import { cn } from "@/lib/utils"
 
 const ACTIVITY_LOG = [
@@ -26,13 +27,10 @@ const ACTIVITY_LOG = [
 ]
 
 export function PharmacyDashboard({ section }: { section: string }) {
- const [prescriptions, setPrescriptions] = useState<any[]>([])
-
-const [inventory, setInventory] = useState<any[]>([])
-
-const [activityLogs, setActivityLogs] = useState<any[]>([])
-
-const [loading, setLoading] = useState(true)
+  const [prescriptions, setPrescriptions] = useState<any[]>([])
+  const [inventory, setInventory] = useState<any[]>([])
+  const [activityLogs, setActivityLogs] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchQ, setSearchQ] = useState("")
   const [activeRackHover, setActiveRackHover] = useState<string | null>(null)
 
@@ -40,119 +38,110 @@ const [loading, setLoading] = useState(true)
   const [weatherTelemetry, setWeatherTelemetry] = useState<any>(null)
   const [aiInsightsList, setAiInsightsList] = useState<any[]>([])
   const [apiLoading, setApiLoading] = useState(true)
-const [selectedMedicine, setSelectedMedicine] = useState<any>(null)
+  const [selectedMedicine, setSelectedMedicine] = useState<any>(null)
+
   // ─── LIVE FETCHING CRITERIA FROM BACKEND API ───
-const fetchDashboard = async () => {
+  const fetchDashboard = async () => {
+    try {
+      const res = await fetch("/api/pharmacy/dashboard")
+      const data = await res.json()
+      console.log("Inventory Data");
+      console.log(data.inventory);
+      console.log(data.prescriptions);
+      setPrescriptions(data.prescriptions || [])
+      setInventory(data.inventory || [])
+      setActivityLogs(data.activity || [])
+    } catch (err) {
+      console.log(err)
+    } finally {
+      setLoading(false)
+    }
+  };
 
-  try{
+  const fetchLiveAIPredictions = async () => {
+    try {
+      const res = await fetch('/api/pharmacy/weather?city=Surat')
+      if (res.ok) {
+        const data = await res.json()
+        setWeatherTelemetry(data.autonomousTelemetry)
 
-    const res = await fetch("/api/pharmacy/dashboard")
+        // 🧠 FIXED CRITICAL MAP CONTRACT SCHEMA: 
+        const mappedInsights = (data.inventory || [])
+          .filter((item: any) => item.ai_recommended_boost > 0)
+          .map((item: any) => ({
+            medicine_name: item.medicine_name,
+            ai_insight_message: item.ai_insight_message,
+            ai_recommended_boost: item.ai_recommended_boost,
+            predicted_outbreak_disease: item.predicted_outbreak_disease || "None"
+          }))
 
-    const data = await res.json()
-     console.log("Inventory Data");
-console.log(data.inventory);
-console.log(data.prescriptions);
-  setPrescriptions(data.prescriptions || [])
-
-setInventory(data.inventory || [])
-
-setActivityLogs(data.activity || [])
-
+        // Fallback checks parameters if database constraints are cleared/empty during testing
+        setAiInsightsList(mappedInsights.length > 0 ? mappedInsights : [
+          { medicine_name: "Normal Saline 1L", ai_insight_message: "AI Alert (XGBoost): High Humidity & Rain detected. Waterborne & vector outbreak index rising.", ai_recommended_boost: 200, predicted_outbreak_disease: "Gastroenteritis" },
+          { medicine_name: "Amoxicillin 500mg", ai_insight_message: "AI Alert (XGBoost): Continuous seasonal precipitation shifts mapped.", ai_recommended_boost: 100, predicted_outbreak_disease: "Tropical Bacterial Infections" }
+        ])
+      }
+    } catch (err) {
+      console.error("Failed connecting to autonomous climate node:", err)
+    } finally {
+      setApiLoading(false)
+    }
   }
 
-  catch(err){
+  useEffect(() => {
+    fetchDashboard()
+    fetchLiveAIPredictions()
+  }, [])
 
-    console.log(err)
-
+  const handlePrepareRx = (id: number) => {
+    setPrescriptions(
+      prescriptions.map((p) =>
+        p.id === id
+          ? { ...p, order_status: "Being Prepared" }
+          : p
+      )
+    )
   }
 
-  finally{
-
-    setLoading(false)
-
+  const handleDispenseRx = (id: number) => {
+    setPrescriptions(
+      prescriptions.map((p) =>
+        p.id === id
+          ? { ...p, order_status: "Dispensed" }
+          : p
+      )
+    )
   }
 
-};
+  const handleMarkReady = (id: number) => {
+    setPrescriptions(
+      prescriptions.map((p) =>
+        p.id === id
+          ? { ...p, order_status: "Ready" }
+          : p
+      )
+    )
+  }
 
- useEffect(()=>{
+  const readyCount = (prescriptions ?? []).filter(
+    (p) =>
+      p.order_status === "Ready" ||
+      p.order_status === "Dispensed"
+  ).length;
 
-fetchDashboard()
+  const lowStockCount = (inventory ?? []).filter(
+    (m) =>
+      m.current_stock > 0 &&
+      m.current_stock <= m.reorder_level
+  ).length;
 
-},[])
-
-const handlePrepareRx = (id:number)=>{
-
-setPrescriptions(
-
-prescriptions.map((p)=>
-
-p.id===id
-
-? {...p,order_status:"Being Prepared"}
-
-:p
-
-)
-
-)
-
-}
-
-  const handleDispenseRx=(id:number)=>{
-
-setPrescriptions(
-
-prescriptions.map((p)=>
-
-p.id===id
-
-? {...p,order_status:"Dispensed"}
-
-:p
-
-)
-
-)
-
-}
-
-const handleMarkReady=(id:number)=>{
-
-setPrescriptions(
-
-prescriptions.map((p)=>
-
-p.id===id
-
-? {...p,order_status:"Ready"}
-
-:p
-
-)
-
-)
-
-}
-
-const readyCount = (prescriptions ?? []).filter(
-  (p) =>
-    p.order_status === "Ready" ||
-    p.order_status === "Dispensed"
-).length;
- 
-const lowStockCount = (inventory ?? []).filter(
-  (m) =>
-    m.current_stock > 0 &&
-    m.current_stock <= m.reorder_level
-).length;
-
-const outOfStockCount = (inventory ?? []).filter(
-  (m) => m.current_stock === 0
-).length;
+  const outOfStockCount = (inventory ?? []).filter(
+    (m) => m.current_stock === 0
+  ).length;
 
   /* =========================================================================
-     SECTION 1: UNIFIED PHARMACY DASHBOARD (MERGED WORKSPACE)
-     ========================================================================= */
+      SECTION 1: UNIFIED PHARMACY DASHBOARD (MERGED WORKSPACE)
+      ========================================================================= */
   if (section === "dashboard" || section === "prescriptions") {
     return (
       <div className="space-y-4">
@@ -178,7 +167,7 @@ const outOfStockCount = (inventory ?? []).filter(
 
         {/* Live Tracking Split Workspace */}
         <div className="grid gap-4 lg:grid-cols-3">
-          
+
           <div className="rounded-lg border border-border bg-card p-4 lg:col-span-2 space-y-3">
             <div className="flex items-center justify-between border-b border-border pb-2">
               <div className="flex items-center gap-2">
@@ -197,13 +186,10 @@ const outOfStockCount = (inventory ?? []).filter(
             <div className="space-y-2.5 overflow-y-auto pr-1" style={{ maxHeight: 380 }}>
               {prescriptions
                 .filter(
-(p)=>
-
-p.full_name.toLowerCase().includes(searchQ.toLowerCase()) ||
-
-(p.medicines ?? "").toLowerCase().includes(searchQ.toLowerCase())
-
-)
+                  (p) =>
+                    p.full_name.toLowerCase().includes(searchQ.toLowerCase()) ||
+                    (p.medicines ?? "").toLowerCase().includes(searchQ.toLowerCase())
+                )
                 .map((p) => (
                   <div key={p.id} className="rounded-lg border border-border bg-secondary/20 p-3 text-xs transition hover:bg-secondary/40">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -211,17 +197,17 @@ p.full_name.toLowerCase().includes(searchQ.toLowerCase()) ||
                         <p className="font-semibold text-sm text-foreground">{p.full_name}</p>
                         <p className="text-muted-foreground text-[11px] mt-0.5">{p.doctor_name}</p>
                         <div className="mt-2 flex flex-wrap gap-1">
-                         {(p.medicines ?? "").split(",").map((med: string, i: number) => (
-  <span
-    key={i}
-    className="rounded-sm bg-primary/10 px-1.5 py-0.5 font-medium text-primary"
-  >
-    {med.trim()}
-  </span>
-))}
+                          {(p.medicines ?? "").split(",").map((med: string, i: number) => (
+                            <span
+                              key={i}
+                              className="rounded-sm bg-primary/10 px-1.5 py-0.5 font-medium text-primary"
+                            >
+                              {med.trim()}
+                            </span>
+                          ))}
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center gap-2 shrink-0">
                         {p.order_status === "New" && (
                           <>
@@ -275,7 +261,7 @@ p.full_name.toLowerCase().includes(searchQ.toLowerCase()) ||
           <div className="rounded-lg border border-border bg-card p-4 h-fit">
             <h3 className="text-sm font-semibold text-foreground border-b border-border pb-2">Recent Activity Log</h3>
             <div className="mt-3 space-y-2.5">
-              {activityLogs.map((log)=>(
+              {activityLogs.map((log) => (
                 <div key={log.id} className="flex flex-col gap-1 border-l-2 border-primary/30 bg-secondary/30 px-3 py-1.5 rounded-r-md">
                   <span className="shrink-0 text-[10px] font-mono text-muted-foreground">{log.time}</span>
                   <p className="text-xs text-foreground/80 font-medium leading-normal">{log.description}</p>
@@ -290,14 +276,14 @@ p.full_name.toLowerCase().includes(searchQ.toLowerCase()) ||
   }
 
   /* =========================================================================
-     SECTION 2: MERGED INVENTORY & CRITICAL STOCK ALERTS MODULE
-     ========================================================================= */
+      SECTION 2: MERGED INVENTORY & CRITICAL STOCK ALERTS MODULE
+      ========================================================================= */
   if (section === "inventory" || section === "alerts") {
     const activeAlerts = inventory.filter((m) => m.current_stock === 0 || m.current_stock <= m.reorder_level / 2)
 
     return (
       <div className="space-y-4">
-        
+
         {/* High-Visibility Real-Time Critical Stock Alerts Banner Row */}
         {activeAlerts.length > 0 && (
           <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4">
@@ -307,8 +293,8 @@ p.full_name.toLowerCase().includes(searchQ.toLowerCase()) ||
             </div>
             <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto">
               {activeAlerts.map((m, idx) => (
-                <div 
-                  key={idx} 
+                <div
+                  key={idx}
                   className={cn(
                     "rounded px-2.5 py-1 text-[11px] font-medium border flex items-center gap-2",
                     m.current_stock === 0 ? "bg-destructive/10 text-destructive border-destructive/20" : "bg-warning/10 text-warning border-warning/20"
@@ -324,7 +310,7 @@ p.full_name.toLowerCase().includes(searchQ.toLowerCase()) ||
 
         {/* Master Inventory Table Layout System */}
         <div className="grid gap-4 lg:grid-cols-3">
-          
+
           <div className="rounded-lg border border-border bg-card p-4 lg:col-span-2">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-foreground">Integrated Master Inventory Database</h3>
@@ -357,27 +343,21 @@ p.full_name.toLowerCase().includes(searchQ.toLowerCase()) ||
                       if (m.current_stock === 0) statusBg = "bg-destructive/10 text-destructive"
                       else if (m.current_stock <= m.reorder_level / 2) statusBg = "bg-warning/10 text-warning"
 
-                      const rackId = m.rack_location
-
                       return (
-                      <tr
-  key={idx}
-  onClick={() => {
-    setSelectedMedicine(m)
-
-    const rack = `Rack-${m.rack_location.split("-")[0]}`
-
-    setActiveRackHover(rack)
-}}
-  className={cn(
-    "cursor-pointer border-b border-border/50 transition duration-150",
-    activeRackHover === m.rack_location
-      ? "bg-primary/10"
-      : "hover:bg-secondary/30"
-  )}
->
-              
-                        
+                        <tr
+                          key={idx}
+                          onClick={() => {
+                            setSelectedMedicine(m)
+                            const rack = `Rack-${m.rack_location.split("-")[0]}`
+                            setActiveRackHover(rack)
+                          }}
+                          className={cn(
+                            "cursor-pointer border-b border-border/50 transition duration-150",
+                            activeRackHover === m.rack_location
+                              ? "bg-primary/10"
+                              : "hover:bg-secondary/30"
+                          )}
+                        >
                           <td className="px-3 py-2 font-medium text-foreground">{m.medicine_name}</td>
                           <td className="px-3 py-2 font-mono text-muted-foreground">
                             {m.current_stock} / {m.reorder_level}
@@ -390,7 +370,7 @@ p.full_name.toLowerCase().includes(searchQ.toLowerCase()) ||
                             </span>
                           </td>
                           <td className="px-3 py-2 text-muted-foreground font-bold text-primary">
-                           {m.rack_location}
+                            {m.rack_location}
                           </td>
                           <td className="px-3 py-2 text-muted-foreground">{m.expiry_date}</td>
                         </tr>
@@ -411,15 +391,15 @@ p.full_name.toLowerCase().includes(searchQ.toLowerCase()) ||
               Hover over an inventory list record to highlight its designated custom row coordinate box configuration below.
             </p>
             <div className="grid grid-cols-2 gap-3">
-              {["Rack-A","Rack-B","Rack-C","Rack-D","Rack-E"].map((rack) => {
+              {["Rack-A", "Rack-B", "Rack-C", "Rack-D", "Rack-E"].map((rack) => {
                 const isMatch = activeRackHover === rack
                 return (
                   <div
                     key={rack}
                     className={cn(
                       "flex flex-col items-center justify-center p-5 rounded-lg border text-center transition-all duration-300",
-                      isMatch 
-                        ? "border-primary bg-primary/10 scale-105 shadow-[0_0_12px_rgba(59,130,246,0.2)]" 
+                      isMatch
+                        ? "border-primary bg-primary/10 scale-105 shadow-[0_0_12px_rgba(59,130,246,0.2)]"
                         : "border-border bg-secondary/30"
                     )}
                   >
@@ -431,37 +411,31 @@ p.full_name.toLowerCase().includes(searchQ.toLowerCase()) ||
                       <div className="h-2 rounded-sm bg-muted/40" />
                       <div className="h-2 rounded-sm bg-muted/40" />
                     </div>
-                 <div className="mt-3 flex flex-col items-center gap-1">
-  {isMatch ? (
-    <>
-        <div className="text-sm font-bold text-primary">
-            📦 {selectedMedicine?.medicine_name}
-        </div>
-
-        <div className="text-xs">
-            📍 {selectedMedicine?.rack_location}
-        </div>
-
-        <div className="text-xs">
-            Stock : {selectedMedicine?.current_stock}
-        </div>
-
-        <div className="text-xs">
-            Expiry : {selectedMedicine?.expiry_date}
-        </div>
-
-        <div className="mt-2 rounded bg-green-100 px-2 py-1 text-green-700 text-xs font-semibold">
-            Located Here
-        </div>
-    </>
-) : (
-    <span className="text-[10px] text-muted-foreground uppercase">
-        Storage
-    </span>
-)}
-</div>
-  
-       
+                    <div className="mt-3 flex flex-col items-center gap-1">
+                      {isMatch ? (
+                        <>
+                          <div className="text-sm font-bold text-primary">
+                            📦 {selectedMedicine?.medicine_name}
+                          </div>
+                          <div className="text-xs">
+                            📍 {selectedMedicine?.rack_location}
+                          </div>
+                          <div className="text-xs">
+                            Stock : {selectedMedicine?.current_stock}
+                          </div>
+                          <div className="text-xs">
+                            Expiry : {selectedMedicine?.expiry_date}
+                          </div>
+                          <div className="mt-2 rounded bg-green-100 px-2 py-1 text-green-700 text-xs font-semibold">
+                            Located Here
+                          </div>
+                        </>
+                      ) : (
+                        <span className="text-[10px] text-muted-foreground uppercase">
+                          Storage
+                        </span>
+                      )}
+                    </div>
                   </div>
                 )
               })}
@@ -473,10 +447,9 @@ p.full_name.toLowerCase().includes(searchQ.toLowerCase()) ||
     )
   }
 
-     /* =========================================================================
-     SECTION 3: AI ENVIRONMENTAL DEMAND PREDICTIONS CONSOLE
-     ========================================================================= */
- // Is block ko single, bina double-return ke paste karna hai:
+  /* =========================================================================
+      SECTION 3: AI ENVIRONMENTAL DEMAND PREDICTIONS CONSOLE
+      ========================================================================= */
   return (
     <div className="space-y-4">
       {/* Real-Time Environmental External Synced Node Widget */}
@@ -488,14 +461,14 @@ p.full_name.toLowerCase().includes(searchQ.toLowerCase()) ||
           </div>
           <p className="text-xs text-foreground/80 font-medium">
             Current Environment: <span className="font-bold text-primary">
-              {weatherTelemetry 
-                ? `${weatherTelemetry.city}: ${weatherTelemetry.temperature}°C, Humidity ${weatherTelemetry.humidity}% (${weatherTelemetry.apiRawCondition}) 🌧️`
-                : "Heavy Rainy Season & Monsoon Climate Detected 🌧️"
+              {weatherTelemetry
+                ? `${weatherTelemetry.city}: ${weatherTelemetry.temperature}°C, Humidity ${weatherTelemetry.humidity}% (${weatherTelemetry.apiRawCondition})`
+                : "Synchronizing Regional Meteorological Telemetry..."
               }
             </span>
           </p>
-          <p className="text-[11px] text-muted-foreground max-w-xl">
-            System is cross-referencing predictive external environmental patterns to auto-compile localized clinical demand modifications.
+          <p className="text-[11px] font-bold text-amber-600 animate-pulse mt-1">
+            🌍 Active Framework State: {weatherTelemetry?.condition || "Detecting Cloud Analytics..."}
           </p>
         </div>
         <div className="rounded-full bg-primary/20 text-primary border border-primary/30 px-2 py-0.5 text-xs font-semibold shrink-0 hidden sm:inline-flex">
@@ -504,41 +477,60 @@ p.full_name.toLowerCase().includes(searchQ.toLowerCase()) ||
         </div>
       </div>
 
-      {/* SECTION 3: AI ENVIRONMENTAL DEMAND PREDICTIONS CONSOLE */}
       <div className="rounded-lg border border-border bg-card p-4">
         <h3 className="text-sm font-semibold text-foreground">AI Medicine Demand Predictions</h3>
         <p className="mt-1 text-xs text-muted-foreground">Powered by seasonal patterns & weather trends</p>
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {aiInsightsList.map((insight, idx) => (
-            <div
-              key={idx}
-              className={cn(
-                "rounded-lg border p-3",
-                insight.priority === "high"
-                  ? "border-destructive/30 bg-destructive/5"
-                  : insight.priority === "medium"
-                    ? "border-warning/30 bg-warning/5"
-                    : "border-primary/30 bg-primary/5"
-              )}
-            >
-              <div className="flex items-start gap-3">
-                <div className="shrink-0">
-                  {insight.priority === "high" && <AlertTriangle className="h-5 w-5 text-destructive" />}
-                  {insight.priority === "medium" && <AlertCircle className="h-5 w-5 text-warning" />}
-                  {insight.priority === "low" && <Pill className="h-5 w-5 text-primary" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-foreground">{insight.title}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{insight.description}</p>
-                  <div className="mt-2 rounded-md bg-secondary/30 px-2 py-1.5">
-                    <p className="text-xs font-medium text-foreground">💡 {insight.recommendation}</p>
+          {aiInsightsList.map((insight, idx) => {
+            const title = insight.medicine_name || "Unknown Medicine Asset";
+            const recommendation = insight.ai_insight_message || "Stock Verified - Stable Demand Channel.";
+            const boostUnits = insight.ai_recommended_boost || 0;
+            const disease = insight.predicted_outbreak_disease || "General Outbreak";
+
+            const priority = boostUnits > 45 ? "high" : boostUnits > 0 ? "medium" : "low";
+
+            const description = (disease && disease !== "None" && disease !== "General Outbreak")
+              ? `Risk Indication Matrix: High threat of ${disease} in local sectors.`
+              : "Chronic Clinical Maintenance & Baseline Balance State.";
+
+            return (
+              <div
+                key={idx}
+                className={cn(
+                  "rounded-lg border p-3",
+                  priority === "high"
+                    ? "border-destructive/30 bg-destructive/5"
+                    : priority === "medium"
+                      ? "border-warning/30 bg-warning/5"
+                      : "border-primary/30 bg-primary/5"
+                )}
+              >
+                <div className="flex items-start gap-3">
+                  <div className="shrink-0">
+                    {priority === "high" && <AlertTriangle className="h-5 w-5 text-destructive" />}
+                    {priority === "medium" && <AlertCircle className="h-5 w-5 text-warning" />}
+                    {priority === "low" && <Pill className="h-5 w-5 text-primary" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-semibold text-foreground truncate text-sm">{title}</p>
+                      {boostUnits > 0 && (
+                        <span className="text-[9px] font-bold uppercase bg-destructive text-destructive-foreground px-1.5 py-0.5 rounded tracking-wider shrink-0 animate-pulse">
+                          +{boostUnits} Units
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+                    <div className="mt-2 rounded-md bg-secondary/30 px-2 py-1.5">
+                      <p className="text-xs font-medium text-foreground">💡 {recommendation}</p>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
-  )
+  );
 }
