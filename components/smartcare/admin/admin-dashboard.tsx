@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+
 import {
   Activity,
   BedDouble,
@@ -28,6 +29,9 @@ import { Panel, PanelHeader, Badge, Stat } from "../ui"
 import { cn } from "@/lib/utils"
 
 export function AdminDashboard({ section }: { section: string }) {
+
+  const [dashboard, setDashboard] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   return (
     <div className="space-y-5">
       {section === "overview" && <Overview />}
@@ -41,43 +45,52 @@ export function AdminDashboard({ section }: { section: string }) {
 /* -------------------------------- Overview ------------------------------- */
 
 function Overview() {
-  const [ticker, setTicker] = useState<string[]>([
-    "WS · Patient A-118 escalated to Emergency",
-    "WS · ICU-03 marked vacating soon",
-    "WS · Pharmacy: Amoxicillin stock depleted",
-  ])
-  const [connections, setConnections] = useState(1284)
+
+  const [dashboard, setDashboard] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [connections, setConnections] = useState(0);
+const ticker = dashboard?.liveEvents || [];
+ 
 
   useEffect(() => {
-    const id = window.setInterval(() => {
-      setConnections((c) => c + Math.floor(Math.random() * 7) - 3)
-      const events = [
-        "WS · New token A-1" + (20 + Math.floor(Math.random() * 70)) + " issued",
-        "WS · Bed GEN-" + (1 + Math.floor(Math.random() * 16)) + " status changed",
-        "WS · Triage queue depth recalculated",
-        "WS · Staff check-in: Nurse station 4",
-        "WS · Lab result posted for MRN 44" + (10 + Math.floor(Math.random() * 80)),
-      ]
-      const ev = events[Math.floor(Math.random() * events.length)]
-      setTicker((t) => [ev, ...t].slice(0, 6))
-    }, 2600)
-    return () => window.clearInterval(id)
-  }, [])
+  async function loadDashboard() {
+    try {
+      const res = await fetch("/api/admin/overview");
 
+      if (!res.ok) throw new Error("Failed");
+
+      const data = await res.json();
+        console.log(data.departmentChart);
+setDashboard(data);
+     
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  loadDashboard();
+}, []);
   return (
     <div className="space-y-5">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Stat label="Bottleneck Index" value="0.34" sub="Below critical threshold (0.6)" icon={<Gauge className="h-4 w-4" />} tone="success" />
-        <Stat label="Active Staff" value="148" sub="32 physicians · 78 nursing" icon={<Users className="h-4 w-4" />} />
-        <Stat label="Ward Load" value="82%" sub="Occupancy across 50 beds" icon={<BedDouble className="h-4 w-4" />} tone="warning" />
-        <Stat label="Live Connections" value={connections.toLocaleString()} sub="WebSocket sessions" icon={<Radio className="h-4 w-4" />} />
+        <Stat label="Active Staff" value={loading ? "--" : dashboard?.stats?.todayPatients}sub="32 physicians · 78 nursing" icon={<Users className="h-4 w-4" />} />
+        <Stat label="Ward Load" value={loading ? "--" : dashboard?.stats?.availableBeds + "%"} sub="Occupancy across 50 beds" icon={<BedDouble className="h-4 w-4" />} tone="warning" />
+        <Stat label="Live Connections" value={loading ? "--" : connections.toLocaleString()} sub="WebSocket sessions" icon={<Radio className="h-4 w-4" />} />
       </div>
 
       <div className="grid gap-5 lg:grid-cols-3">
         <Panel className="lg:col-span-2">
           <PanelHeader title="Department Throughput" subtitle="Patients processed · last 8 hours" icon={<TrendingUp className="h-4 w-4" />} />
           <div className="p-4">
-            <ThroughputChart />
+            <ThroughputChart
+data={dashboard?.departmentChart || []}
+/>
+<WardLoadPanel
+    wards={dashboard?.wardStats || []}
+/>
           </div>
         </Panel>
 
@@ -93,35 +106,59 @@ function Overview() {
             }
           />
           <ul className="flex-1 divide-y divide-border overflow-y-auto" style={{ maxHeight: 280 }}>
-            {ticker.map((t, i) => (
-              <li key={`${t}-${i}`} className="flex items-start gap-2 px-4 py-2.5 text-xs">
-                <span className="mt-0.5 font-mono text-[10px] text-primary">{i === 0 ? "now" : `${i * 3}s`}</span>
-                <span className="text-foreground">{t}</span>
-              </li>
-            ))}
+         {ticker.map((t: any, i: number) => (
+  <li key={i} className="flex items-start gap-2 px-4 py-2.5 text-xs">
+    <span className="mt-0.5 font-mono text-[10px] text-primary">
+      {i === 0 ? "now" : `${i * 3}s`}
+    </span>
+
+    <span className="text-foreground">
+      {t.description}
+    </span>
+  </li>
+))}
           </ul>
         </Panel>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
-        <WardLoadPanel />
+       <WardLoadPanel
+wards={dashboard?.wardStats || []}
+/>
         <Panel>
           <PanelHeader title="Critical Alerts" icon={<TriangleAlert className="h-4 w-4" />} />
           <div className="divide-y divide-border">
-            {[
-              { t: "Amoxicillin 500mg — out of stock", tone: "danger" as const, tag: "Pharmacy" },
-              { t: "ICU occupancy at 92% capacity", tone: "warning" as const, tag: "Capacity" },
-              { t: "ED wait time exceeds 25 min SLA", tone: "warning" as const, tag: "Throughput" },
-              { t: "Albuterol inhaler below reorder point", tone: "danger" as const, tag: "Pharmacy" },
-            ].map((a) => (
-              <div key={a.t} className="flex items-center justify-between gap-3 px-4 py-3">
-                <div className="flex items-center gap-2.5">
-                  <span className={cn("h-2 w-2 rounded-full", a.tone === "danger" ? "bg-destructive" : "bg-warning")} />
-                  <span className="text-sm text-foreground">{a.t}</span>
-                </div>
-                <Badge className="border-border bg-secondary text-muted-foreground">{a.tag}</Badge>
-              </div>
-            ))}
+          {dashboard?.criticalAlerts?.map((a:any) => (
+  <div
+    key={a.alert_id}
+    className="flex items-center justify-between gap-3 px-4 py-3"
+  >
+    <div className="flex items-center gap-2.5">
+      <span
+        className={cn(
+          "h-2 w-2 rounded-full",
+          a.severity === "Critical"
+            ? "bg-destructive"
+            : "bg-warning"
+        )}
+      />
+
+      <div>
+        <p className="text-sm font-medium">
+          {a.medicine_name}
+        </p>
+
+        <p className="text-xs text-muted-foreground">
+          {a.alert_type}
+        </p>
+      </div>
+    </div>
+
+    <Badge>
+      Stock : {a.current_stock}
+    </Badge>
+  </div>
+))}
           </div>
         </Panel>
       </div>
@@ -129,43 +166,51 @@ function Overview() {
   )
 }
 
-function ThroughputChart() {
-  const data = [42, 58, 71, 64, 88, 96, 79, 102]
-  const max = Math.max(...data)
+function ThroughputChart({ data }: { data: any[] }) {
+
+  if (!data || data.length === 0) {
+    return (
+      <div className="h-44 flex items-center justify-center text-muted-foreground">
+        No Data Available
+      </div>
+    );
+  }
+
+  const values = data.map((d) => Number(d.patients));
+  console.log(values);
+  const max = Math.max(...values, 1);
+
   return (
-    <div className="flex h-44 items-stretch gap-2">
-      {data.map((v, i) => (
-        <div key={i} className="flex h-full flex-1 flex-col items-center gap-1.5">
-          <div className="flex w-full flex-1 items-end">
-            <div
-              className="w-full rounded-t bg-primary/85 transition-all"
-              style={{ height: `${(v / max) * 100}%` }}
-              title={`${v} patients`}
-            />
-          </div>
-          <span className="text-[10px] text-muted-foreground">{`${8 + i}:00`}</span>
+    <div className="flex h-44 items-end gap-3">
+      {data.map((item: any, index: number) => (
+        <div key={index} className="flex flex-1 flex-col items-center">
+          <div
+            className="w-full rounded-t bg-blue-500"
+            style={{
+          
+  height: `${Math.max((values[index] / max) * 100, 10)}%`,
+              minHeight: "8px",
+            }}
+          />
+          <span className="mt-2 text-xs">
+            {item.hour}:00
+          </span>
         </div>
       ))}
     </div>
-  )
+  );
 }
 
-function WardLoadPanel() {
-  const wards = [
-    { name: "ICU", load: 92, tone: "danger" as const },
-    { name: "General Medicine", load: 78, tone: "warning" as const },
-    { name: "Pediatrics", load: 54, tone: "success" as const },
-    { name: "Surgical", load: 68, tone: "warning" as const },
-  ]
+function WardLoadPanel({ wards }: { wards: any[] }) {
   return (
     <Panel>
       <PanelHeader title="Ward Load Statistics" icon={<BedDouble className="h-4 w-4" />} />
       <div className="space-y-4 p-4">
         {wards.map((w) => (
-          <div key={w.name}>
+          <div key={w.ward_name}>
             <div className="mb-1 flex items-center justify-between text-sm">
-              <span className="font-medium text-foreground">{w.name}</span>
-              <span className="tabular-nums text-muted-foreground">{w.load}%</span>
+              <span className="font-medium text-foreground">{w.ward_name}</span>
+              <span className="tabular-nums text-muted-foreground">{w.occupancy}%</span>
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-secondary">
               <div
@@ -173,7 +218,7 @@ function WardLoadPanel() {
                   "h-full rounded-full",
                   w.tone === "danger" ? "bg-destructive" : w.tone === "warning" ? "bg-warning" : "bg-success",
                 )}
-                style={{ width: `${w.load}%` }}
+                style={{ width: `${w.occupancy}%` }}
               />
             </div>
           </div>

@@ -1,6 +1,7 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState, } from "react"
+
 import React from "react"
 import {
   AlarmClock,
@@ -169,7 +170,80 @@ export function PatientConsole({
 
   // ─── ✅ ADDED STATE: FAMILY PATIENT SWITCH ENGINE ───
   const [selectedMember, setSelectedMember] = useState<keyof typeof FAMILY_DATA>("self")
+const [dashboardData, setDashboardData] = useState<any>(null)
+const [checkInData,setCheckInData]=useState<any>(null)
+const [loadingDashboard, setLoadingDashboard] = useState(false)
 
+
+const memberPatientMap = {
+  self: 1,
+  father: 2,
+  mother: 3,
+  child: 4,
+}
+useEffect(() => {
+
+    async function loadDashboard(){
+
+        setLoadingDashboard(true)
+
+        try{
+
+            const patientId =
+            memberPatientMap[selectedMember]
+
+            const res = await fetch(
+            `/api/patient/dashboard?patientId=${patientId}`)
+
+            const data = await res.json()
+
+            setDashboardData(data)
+
+        }
+
+        catch(err){
+
+            console.log(err)
+
+        }
+
+        finally{
+
+            setLoadingDashboard(false)
+
+        }
+
+    }
+
+    loadDashboard()
+    loadCheckIn()
+    async function loadCheckIn() {
+
+    try{
+
+        const patientId = memberPatientMap[selectedMember]
+
+        const res = await fetch(
+            `/api/patient/checkin?patientId=${patientId}`
+        )
+
+        const data = await res.json()
+
+        setCheckInData(data)
+
+    }
+
+    catch(err){
+
+        console.log(err)
+
+    }
+
+}
+
+
+
+},[selectedMember])
   const generateToken = useCallback(() => {
     const num = 118 + Math.floor(Math.random() * 40)
     setToken(`A-${num}`)
@@ -199,7 +273,14 @@ export function PatientConsole({
       </div>
 
       {section === "dashboard" && (
-        <PatientDashboard token={token} stage={stage} onNavigate={onNavigate} memberKey={selectedMember} />
+       <PatientDashboard
+token={token}
+stage={stage}
+onNavigate={onNavigate}
+memberKey={selectedMember}
+dashboardData={dashboardData}
+loading={loadingDashboard}
+/>
       )}
       {section === "receptionist" && (
         <VoiceReceptionist
@@ -218,9 +299,23 @@ export function PatientConsole({
           onGenerate={generateToken}
         />
       )}
-      {section === "checkin" && <QrCheckIn token={token} />}
-      {section === "admission" && <AdmissionPipeline stage={stage} setStage={setStage} />}
+{section==="checkin" && (
+<QrCheckIn
+    token={token}
+    patientId={memberPatientMap[selectedMember]}
+    checkInData={checkInData}
+    setCheckInData={setCheckInData}
+/>
+    )}
+     {section === "admission" && (
+  <AdmissionPipeline 
+    stage={stage}
+    setStage={setStage}
+    appointmentId={dashboardData?.appointment?.appointment_id}
+  />
+)}
     </div>
+
   )
 }
 
@@ -228,35 +323,84 @@ export function PatientConsole({
    SUB-COMPONENT 1: Dashboard (Modified smoothly for family switching)
    ========================================================================= */
 function PatientDashboard({
-  token,
-  stage,
-  onNavigate,
-  memberKey, // ✅ Passed memberKey parameter
+token,
+stage,
+onNavigate,
+memberKey,
+dashboardData,
+loading
 }: {
-  token: string | null
-  stage: number
-  onNavigate: (k: string) => void
-  memberKey: keyof typeof FAMILY_DATA // ✅ Type security
+token:string|null
+stage:number
+onNavigate:(k:string)=>void
+memberKey:keyof typeof FAMILY_DATA
+dashboardData:any
+loading:boolean
 }) {
-  const nowServing = 114
+ const nowServing =
+dashboardData?.nowServing ??
+114
   
   // ─── ✅ DYNAMICALLY READ FROM FAMILY RECORDS Snapshot ───
-  const activeData = FAMILY_DATA[memberKey]
-  const myNumber = token ? Number(token.split("-")[1]) : activeData.tokenFallback
+
+  const activeData =
+dashboardData || FAMILY_DATA[memberKey]
+const tokenNumber =
+String(
+dashboardData?.appointment?.token_number ??
+`A-${FAMILY_DATA[memberKey].tokenFallback}`
+)
+
+const myNumber = Number(
+tokenNumber.replace("A-", "")
+)
   const ahead = Math.max(0, myNumber - nowServing)
-  const delay = ahead * 6
+const delay =
+dashboardData?.appointment?.estimated_wait ??
+ahead*6
+const dummyMedicines =
+  Array.isArray(dashboardData?.medicines)
+    ? dashboardData.medicines.map((m: any) => ({
+        name: m.medicine_name,
+        dosage: m.dosage,
+        duration: m.duration,
+        status: m.status,
+      }))
+    : FAMILY_DATA[memberKey].medicines;
 
-  const dummyMedicines = activeData.medicines
-  const dummyLabReports = activeData.labReports
-  const dummyVitals = activeData.vitals
 
+const dummyLabReports =
+  Array.isArray(dashboardData?.labReports)
+    ? dashboardData.labReports.map((r: any) => ({
+        testName: r.report_name,
+        orderedBy: "Doctor",
+        status: r.status,
+      }))
+    : FAMILY_DATA[memberKey].labReports;
+
+const dummyVitals =
+  dashboardData?.vitals
+    ? {
+        bp: dashboardData.vitals.blood_pressure,
+        heartRate: dashboardData.vitals.heart_rate,
+        temp: dashboardData.vitals.temperature,
+        spo2: dashboardData.vitals.spo2,
+        respiratoryRate: dashboardData.vitals.respiration_rate,
+      }
+    : FAMILY_DATA[memberKey].vitals;
   return (
     <div className="space-y-5">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Stat label="Now Serving" value={`A-${nowServing}`} sub="Counter 02 · Internal Medicine" icon={<Ticket className="h-4 w-4" />} />
-        <Stat label="Your Token" value={token ?? `A-${activeData.tokenFallback}`} sub={`${ahead} patients ahead`} icon={<Ticket className="h-4 w-4" />} tone="success" />
+        <Stat label="Your Token" value={token ?? tokenNumber} sub={`${ahead} patients ahead`} icon={<Ticket className="h-4 w-4" />} tone="success" />
         <Stat label="Est. Wait" value={`${delay}m`} sub="Recalculated live every 30s" icon={<Clock className="h-4 w-4" />} tone="warning" />
-        <Stat label="Triage Status" value={stage >= 1 ? "Queued" : "Pending"} sub={`Stage ${stage + 1} of 5`} icon={<Activity className="h-4 w-4" />} />
+        <Stat label="Triage Status" value={dashboardData?.appointment?.status
+??
+(stage>=1
+?
+"Queued"
+:
+"Pending")} sub={`Stage ${stage + 1} of 5`} icon={<Activity className="h-4 w-4" />} />
       </div>
 
       <div className="grid gap-5 lg:grid-cols-3">
@@ -279,7 +423,7 @@ function PatientDashboard({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {dummyMedicines.map((med, idx) => (
+                  {dummyMedicines.map((med: any, idx: number) => (
                       <tr key={idx} className="text-foreground">
                         <td className="py-3 font-medium">{med.name}</td>
                         <td className="py-3 text-muted-foreground">{med.dosage}</td>
@@ -317,7 +461,7 @@ function PatientDashboard({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {dummyLabReports.map((report, idx) => (
+                  {dummyLabReports.map((report:any,idx:number)=>(
                       <tr key={idx} className="text-foreground">
                         <td className="py-3 font-medium">{report.testName}</td>
                         <td className="py-3 text-muted-foreground">{report.orderedBy}</td>
@@ -682,21 +826,24 @@ function Passport({ k, v }: { k: string; v: string }) {
 /* =========================================================================
    SUB-COMPONENT 4: QrCheckIn (💯 ORIGINAL - UNTOUCHED)
    ========================================================================= */
-function QrCheckIn({ 
-  token,
-  queue = []
-}: { 
-  token: string | null 
-  queue?: any[]
-}) {
-  const [scanning, setScanning] = useState(false)
-  const [scanned, setScanned] = useState(false)
 
-  const mockQueue = queue.length > 0 ? queue : [
-    { id: "1", token: "A-118", name: "Marcus Delgado", age: 54, sex: "M", complaint: "Acute chest pain...", priority: "emergency", waitMins: 2 },
-    { id: "2", token: "A-119", name: "Priya Raman", age: 33, sex: "F", complaint: "High-grade fever...", priority: "critical", waitMins: 9 },
-    { id: "3", token: "A-120", name: "Edward Chen", age: 41, sex: "M", complaint: "Lower back pain...", priority: "stable", waitMins: 18 }
-  ]
+function QrCheckIn({
+    token,
+    patientId,
+    checkInData,
+    setCheckInData
+}:{
+    token:string|null
+    patientId:number
+    checkInData:any
+    setCheckInData:React.Dispatch<React.SetStateAction<any>>
+}) {
+  const [scanned, setScanned] = useState(false)
+const [scanning, setScanning] = useState(false)
+  
+
+const mockQueue =
+checkInData?.liveQueue || []
 
   const PRIORITY_STYLES: Record<string, { cls: string; label: string; dot: string }> = {
     emergency: { cls: "bg-destructive/10 text-destructive border-destructive/20", label: "Emergency", dot: "bg-destructive" },
@@ -705,14 +852,53 @@ function QrCheckIn({
     routine: { cls: "bg-primary/10 text-primary border-primary/20", label: "Routine", dot: "bg-primary" }
   }
 
-  function startScan() {
+async function startScan(){
+
     setScanning(true)
-    setScanned(false)
-    window.setTimeout(() => {
-      setScanning(false)
-      setScanned(true)
-    }, 2200)
-  }
+
+    try{
+
+        await fetch("/api/patient/checkin",{
+
+            method:"POST",
+
+            headers:{
+                "Content-Type":"application/json"
+            },
+
+            body:JSON.stringify({
+
+                patientId
+
+            })
+
+        })
+
+        const res=await fetch(
+            `/api/patient/checkin?patientId=${patientId}`
+        )
+
+        const data=await res.json()
+
+        setScanned(true)
+
+        setCheckInData(data)
+
+    }
+
+    catch(err){
+
+        console.log(err)
+
+    }
+
+    finally{
+
+        setScanning(false)
+
+    }
+
+}
 
   return (
     <div className="grid gap-5 lg:grid-cols-3">
@@ -729,7 +915,12 @@ function QrCheckIn({
               <div className="text-center text-sidebar-foreground animate-fade-in">
                 <CheckCircle2 className="mx-auto h-14 w-14 text-success" />
                 <p className="mt-2 text-sm font-semibold">Check-in confirmed</p>
-                <p className="text-xs text-sidebar-foreground/60">{token ?? "A-121"} verified</p>
+                
+                <p className="text-xs text-sidebar-foreground/60">{checkInData?.patient?.token ??
+checkInData?.patient?.token_number ??
+token ??
+"A-121"} verified</p>
+
               </div>
             ) : (
               <>
@@ -739,6 +930,7 @@ function QrCheckIn({
                 )}
               </>
             )}
+            
           </div>
 
           <button type="button" onClick={startScan} disabled={scanning} className="mt-5 inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60 w-full justify-center">
@@ -753,7 +945,7 @@ function QrCheckIn({
           <PanelHeader title="Arrival Window" icon={<AlarmClock className="h-4 w-4" />} />
           <div className="p-4">
             <div className="rounded-lg border border-primary/25 bg-primary/5 p-4">
-              <p className="text-3xl font-bold text-primary">30 min</p>
+              <p className="text-3xl font-bold text-primary">{checkInData?.arrivalWindow ?? 30} min</p>
               <p className="mt-1 text-sm font-medium text-foreground">Pre-Arrival Requirement</p>
               <p className="mt-1 text-xs text-muted-foreground">Scan your QR within 30 minutes before your slot to lock your position in the live queue.</p>
             </div>
@@ -763,7 +955,7 @@ function QrCheckIn({
           <PanelHeader title="Grace Window Engine" icon={<TimerReset className="h-4 w-4" />} />
           <div className="p-4">
             <div className="rounded-lg border border-warning/30 bg-warning/10 p-4">
-              <p className="text-3xl font-bold text-warning">3 tokens</p>
+              <p className="text-3xl font-bold text-warning">{checkInData?.graceTokens ?? 3} tokens</p>
               <p className="mt-1 text-sm font-medium text-foreground">Queue Holding Engine</p>
               <p className="mt-1 text-xs text-muted-foreground">If you arrive late, your slot is held for up to 3 tokens before automatic re-queue.</p>
             </div>
@@ -772,14 +964,14 @@ function QrCheckIn({
       </div>
 
       <Panel className="flex flex-col h-full max-h-[440px]">
-        <PanelHeader title="Live Active Patient Line" subtitle={`${mockQueue.length} cases processing currently`} icon={<Activity className="h-4 w-4" />} />
+        <PanelHeader title="Live Active Patient Line" subtitle={`${checkInData?.liveQueue?.length ?? 0} cases processing currently`} icon={<Activity className="h-4 w-4" />} />
         <div className="flex-1 divide-y divide-border overflow-y-auto bg-card">
-          {mockQueue.map((p, i) => {
+          {mockQueue.map((p:any, i:number) => {
             const ps = PRIORITY_STYLES[p.priority] || PRIORITY_STYLES.stable
             return (
-              <div key={p.id} className="flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-muted/20">
+             <div key={p.appointment_id}  className="flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-muted/20">
                 <div className="flex flex-col items-center shrink-0">
-                  <span className="font-mono text-sm font-bold text-primary">{p.token}</span>
+                  <span className="font-mono text-sm font-bold text-primary">{p.token_number}</span>
                   {i === 0 ? (
                     <span className="mt-0.5 text-[9px] font-bold uppercase text-success tracking-wide animate-pulse">In Cabin</span>
                   ) : i === 1 ? (
@@ -788,13 +980,13 @@ function QrCheckIn({
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="truncate text-sm font-semibold text-foreground">{p.name}</p>
+                    <p className="truncate text-sm font-semibold text-foreground">{p.full_name}</p>
                     <span className={cn("h-2 w-2 shrink-0 rounded-full", ps.dot)} />
                   </div>
-                  <p className="truncate text-xs text-muted-foreground mt-0.5">{p.age}{p.sex} · {p.complaint}</p>
+                  <p className="truncate text-xs text-muted-foreground mt-0.5">{p.age}Y • {p.gender} · {p.symptoms}</p>
                   <div className="mt-2 flex items-center justify-between gap-2">
                     <Badge className={cn("text-[10px] px-2 py-0.5 font-semibold border", ps.cls)}>{ps.label}</Badge>
-                    <span className="text-[11px] text-muted-foreground font-medium">{p.waitMins}m wait</span>
+                    <span className="text-[11px] text-muted-foreground font-medium">{p.estimated_wait}m wait</span>
                   </div>
                 </div>
               </div>
@@ -804,18 +996,130 @@ function QrCheckIn({
       </Panel>
     </div>
   )
+
 }
+
 
 /* =========================================================================
    SUB-COMPONENT 5: AdmissionPipeline (💯 ORIGINAL - UNTOUCHED)
    ========================================================================= */
+
+
 function AdmissionPipeline({
-  stage,
-  setStage,
+stage,
+setStage,
+appointmentId,
 }: {
-  stage: number
-  setStage: React.Dispatch<React.SetStateAction<number>>
-}) {
+stage:number
+setStage:React.Dispatch<React.SetStateAction<number>>
+appointmentId?:number
+}){
+
+     const [pipelineData,setPipelineData] = useState<any>(null)
+const [loading,setLoading] = useState(false)
+  
+
+useEffect(()=>{
+
+
+async function loadPipeline(){
+
+if(!appointmentId){
+return
+}
+
+
+try{
+
+setLoading(true)
+
+
+const res = await fetch(
+`/api/patient/admission-pipeline?appointmentId=${appointmentId}`
+)
+
+
+const data = await res.json()
+
+
+if(data.success){
+
+setPipelineData(data.data)
+
+setStage(data.data.current_stage - 1)
+
+}
+
+
+}
+catch(err){
+
+console.log(err)
+
+}
+finally{
+
+setLoading(false)
+
+}
+
+
+}
+
+
+loadPipeline()
+
+
+},[appointmentId])
+ async function updateStage(action:string){
+
+if(!appointmentId){
+console.log("No appointment id")
+return
+}
+
+
+try{
+
+const res = await fetch(
+"/api/patient/admission-pipeline",
+{
+method:"PATCH",
+headers:{
+"Content-Type":"application/json"
+},
+
+body:JSON.stringify({
+
+appointmentId,
+action
+
+})
+
+})
+
+
+const data = await res.json()
+
+
+if(data.success){
+
+setStage(data.data.current_stage-1)
+
+setPipelineData(data.data)
+
+}
+
+
+}
+catch(err){
+
+console.log(err)
+
+}
+
+
+}
   return (
     <div className="space-y-5">
       <Panel>
@@ -824,11 +1128,24 @@ function AdmissionPipeline({
           subtitle="Predictive room allocation & live status rail"
           icon={<Activity className="h-4 w-4" />}
           actions={
-            <div className="flex gap-2">
-              <button type="button" onClick={() => setStage((s) => Math.max(0, s - 1))} className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-accent">Step back</button>
-              <button type="button" onClick={() => setStage((s) => Math.min(ADMISSION_STAGES.length - 1, s + 1))} className="rounded-md bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground hover:opacity-90">Advance stage</button>
-            </div>
-          }
+  <div className="flex gap-2">
+    <button
+      type="button"
+      onClick={() => updateStage("back")}
+      className="rounded-md border border-border px-5 py-2 text-sm font-medium hover:bg-accent"
+    >
+      Step Back
+    </button>
+
+    <button
+      type="button"
+      onClick={() => updateStage("advance")}
+      className="rounded-md bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90"
+    >
+      Advance Stage
+    </button>
+  </div>
+}
         />
         <div className="p-5">
           <ol className="flex flex-col gap-0 md:flex-row md:gap-2">
@@ -858,18 +1175,58 @@ function AdmissionPipeline({
       <div className="grid gap-5 lg:grid-cols-3">
         <Panel className="lg:col-span-2">
           <PanelHeader title="Predictive Room Allocation" icon={<TriangleAlert className="h-4 w-4" />} />
-          <div className="grid gap-3 p-4 sm:grid-cols-3">
-            {[
-              { room: "GEN-08", ward: "General Medicine", prob: "92%", tone: "success" as const },
-              { room: "GEN-11", ward: "General Medicine", prob: "74%", tone: "warning" as const },
-              { room: "ICU-03", ward: "Intensive Care", prob: "41%", tone: "default" as const },
-            ].map((r) => (
-              <div key={r.room} className="rounded-lg border border-border bg-secondary p-4">
-                <p className="text-lg font-bold text-foreground">{r.room}</p>
-                <p className="text-xs text-muted-foreground">{r.ward}</p>
-                <p className={cn("mt-3 text-sm font-semibold", r.tone === "success" ? "text-success" : r.tone === "warning" ? "text-warning" : "text-primary")}>{r.prob} match</p>
-              </div>
-            ))}
+          <div className="grid gap-4 p-4 sm:grid-cols-3">
+            
+
+<div className="rounded-lg border border-border bg-secondary p-4">
+<p className="text-lg font-bold">
+{pipelineData?.predicted_room ?? "--"}
+</p>
+
+<p className="text-xs text-muted-foreground">
+{pipelineData?.target_ward ?? "--"}
+</p>
+
+<p className="mt-3 text-sm font-semibold text-success">
+{pipelineData?.room_match ?? 0}%
+ Match
+</p>
+</div>
+
+
+<div className="rounded-lg border border-border bg-secondary p-4">
+
+<p className="text-lg font-bold">
+ETA
+</p>
+
+<p className="text-xs text-muted-foreground">
+Bed Available In
+</p>
+
+<p className="mt-3 text-sm font-semibold text-warning">
+{pipelineData?.eta_to_bed ?? 0} min
+</p>
+
+</div>
+
+
+<div className="rounded-lg border border-border bg-secondary p-4">
+
+<p className="text-lg font-bold">
+Stage
+</p>
+
+<p className="text-xs text-muted-foreground">
+Admission Progress
+</p>
+
+<p className="mt-3 text-sm font-semibold text-primary">
+Stage {pipelineData?.current_stage ?? 1}/5
+</p>
+
+</div>
+
           </div>
         </Panel>
         
@@ -878,22 +1235,25 @@ function AdmissionPipeline({
           <div className="space-y-3 p-4 text-sm">
             <div className="flex items-center justify-between gap-3">
               <span className="text-muted-foreground">Academic Attending</span>
-              <span className="font-medium text-foreground">Dr. Amelia Shaw</span>
+              <span className="font-medium text-foreground">{pipelineData?.doctor_name ?? "Dr. Amelia Shaw"}</span>
             </div>
             <div className="flex items-center justify-between gap-3">
               <span className="text-muted-foreground">Nurse Core</span>
-              <span className="font-medium text-foreground">J. Okonkwo, RN</span>
+              <span className="font-medium text-foreground">{pipelineData?.nurse_name ?? "J. Okonkwo, RN"}</span>
             </div>
             <div className="flex items-center justify-between gap-3">
               <span className="text-muted-foreground">Target ward</span>
-              <span className="font-medium text-foreground">General Medicine</span>
+              <span className="font-medium text-foreground">{pipelineData?.target_ward ?? "General Medicine"}</span>
             </div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-muted-foreground">ETA to bed</span>
-              <span className="font-medium text-foreground">
-                <Badge className="border-warning/40 bg-warning/15 text-warning">~22 min</Badge>
-              </span>
-            </div>
+            <div className="flex items-center justify-between">
+<span className="text-muted-foreground">
+Estimated Bed Time
+</span>
+
+<span className="font-medium text-foreground">
+{pipelineData?.eta_to_bed ?? 0} min
+</span>
+</div>
           </div>
         </Panel>
       </div>

@@ -15,7 +15,7 @@ import {
   Layers,
   RefreshCw, // Loader for API transitions
 } from "lucide-react"
-import { PRESCRIPTIONS, MEDICINE_INVENTORY, AI_MEDICINE_INSIGHTS, type Prescription } from "@/lib/medical-data"
+
 import { cn } from "@/lib/utils"
 
 const ACTIVITY_LOG = [
@@ -26,8 +26,13 @@ const ACTIVITY_LOG = [
 ]
 
 export function PharmacyDashboard({ section }: { section: string }) {
-  const [prescriptions, setPrescriptions] = useState(PRESCRIPTIONS)
-  const [inventory, setInventory] = useState(MEDICINE_INVENTORY)
+ const [prescriptions, setPrescriptions] = useState<any[]>([])
+
+const [inventory, setInventory] = useState<any[]>([])
+
+const [activityLogs, setActivityLogs] = useState<any[]>([])
+
+const [loading, setLoading] = useState(true)
   const [searchQ, setSearchQ] = useState("")
   const [activeRackHover, setActiveRackHover] = useState<string | null>(null)
 
@@ -35,69 +40,115 @@ export function PharmacyDashboard({ section }: { section: string }) {
   const [weatherTelemetry, setWeatherTelemetry] = useState<any>(null)
   const [aiInsightsList, setAiInsightsList] = useState<any[]>([])
   const [apiLoading, setApiLoading] = useState(true)
-
+const [selectedMedicine, setSelectedMedicine] = useState<any>(null)
   // ─── LIVE FETCHING CRITERIA FROM BACKEND API ───
-  const fetchLiveAIPredictions = async () => {
-    try {
-      const res = await fetch('/api/pharmacy')
-      if (res.ok) {
-        const data = await res.json()
-        setWeatherTelemetry(data.autonomousTelemetry)
+const fetchDashboard = async () => {
 
-        // Maps backend inventory predictions dynamically to match your precise layout contract
-        const mappedInsights = data.inventory
-          .filter((item: any) => item.ai_recommended_boost > 0)
-          .map((item: any) => ({
-            title: `${item.medicine_name} - Surge Risk`,
-            description: item.ai_insight_message,
-            recommendation: `Boost stock balance by +${item.ai_recommended_boost} units immediately.`,
-            priority: item.ai_recommended_boost > 100 ? "high" : "medium"
-          }))
+  try{
 
-        // Fallback checks parameters if database constraints are cleared/empty during testing
-        setAiInsightsList(mappedInsights.length > 0 ? mappedInsights : [
-          { title: "Normal Saline 1L - High Surge Risk", description: "AI Alert (XGBoost): High Humidity & Rain detected. Waterborne & vector outbreak index rising.", recommendation: "Boost stock balance by +200 units immediately.", priority: "high" },
-          { title: "Amoxicillin 500mg - Medium Risk", description: "AI Alert (XGBoost): Continuous seasonal precipitation shifts mapped.", recommendation: "Boost stock balance by +100 units immediately.", priority: "medium" }
-        ])
-      }
-    } catch (err) {
-      console.error("Failed connecting to autonomous climate node:", err)
-    } finally {
-      setApiLoading(false)
-    }
+    const res = await fetch("/api/pharmacy/dashboard")
+
+    const data = await res.json()
+     console.log("Inventory Data");
+console.log(data.inventory);
+console.log(data.prescriptions);
+  setPrescriptions(data.prescriptions || [])
+
+setInventory(data.inventory || [])
+
+setActivityLogs(data.activity || [])
+
   }
 
-  useEffect(() => {
-    fetchLiveAIPredictions()
-  }, [])
+  catch(err){
 
-  const handlePrepareRx = (rxId: string) => {
-    setPrescriptions(
-      prescriptions.map((p) =>
-        p.id === rxId ? { ...p, status: "Being Prepared" } : p
-      ),
-    )
+    console.log(err)
+
   }
 
-  const handleDispenseRx = (rxId: string) => {
-    setPrescriptions(
-      prescriptions.map((p) =>
-        p.id === rxId ? { ...p, status: "Dispensed" } : p
-      ),
-    )
+  finally{
+
+    setLoading(false)
+
   }
 
-  const handleMarkReady = (rxId: string) => {
-    setPrescriptions(
-      prescriptions.map((p) =>
-        p.id === rxId ? { ...p, status: "Ready for Pickup" } : p
-      ),
-    )
-  }
+};
 
-  const readyCount = prescriptions.filter((p) => p.status === "Dispensed" || p.status === "Ready for Pickup").length
-  const lowStockCount = inventory.filter((m) => m.stock > 0 && m.stock <= m.reorder / 2).length
-  const outOfStockCount = inventory.filter((m) => m.stock === 0).length
+ useEffect(()=>{
+
+fetchDashboard()
+
+},[])
+
+const handlePrepareRx = (id:number)=>{
+
+setPrescriptions(
+
+prescriptions.map((p)=>
+
+p.id===id
+
+? {...p,order_status:"Being Prepared"}
+
+:p
+
+)
+
+)
+
+}
+
+  const handleDispenseRx=(id:number)=>{
+
+setPrescriptions(
+
+prescriptions.map((p)=>
+
+p.id===id
+
+? {...p,order_status:"Dispensed"}
+
+:p
+
+)
+
+)
+
+}
+
+const handleMarkReady=(id:number)=>{
+
+setPrescriptions(
+
+prescriptions.map((p)=>
+
+p.id===id
+
+? {...p,order_status:"Ready"}
+
+:p
+
+)
+
+)
+
+}
+
+const readyCount = (prescriptions ?? []).filter(
+  (p) =>
+    p.order_status === "Ready" ||
+    p.order_status === "Dispensed"
+).length;
+ 
+const lowStockCount = (inventory ?? []).filter(
+  (m) =>
+    m.current_stock > 0 &&
+    m.current_stock <= m.reorder_level
+).length;
+
+const outOfStockCount = (inventory ?? []).filter(
+  (m) => m.current_stock === 0
+).length;
 
   /* =========================================================================
      SECTION 1: UNIFIED PHARMACY DASHBOARD (MERGED WORKSPACE)
@@ -146,27 +197,33 @@ export function PharmacyDashboard({ section }: { section: string }) {
             <div className="space-y-2.5 overflow-y-auto pr-1" style={{ maxHeight: 380 }}>
               {prescriptions
                 .filter(
-                  (p) =>
-                    p.patientName.toLowerCase().includes(searchQ.toLowerCase()) ||
-                    p.medicines.some((m) => m.toLowerCase().includes(searchQ.toLowerCase()))
-                )
+(p)=>
+
+p.full_name.toLowerCase().includes(searchQ.toLowerCase()) ||
+
+(p.medicines ?? "").toLowerCase().includes(searchQ.toLowerCase())
+
+)
                 .map((p) => (
                   <div key={p.id} className="rounded-lg border border-border bg-secondary/20 p-3 text-xs transition hover:bg-secondary/40">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0 flex-1">
-                        <p className="font-semibold text-sm text-foreground">{p.patientName}</p>
-                        <p className="text-muted-foreground text-[11px] mt-0.5">{p.doctorName}</p>
+                        <p className="font-semibold text-sm text-foreground">{p.full_name}</p>
+                        <p className="text-muted-foreground text-[11px] mt-0.5">{p.doctor_name}</p>
                         <div className="mt-2 flex flex-wrap gap-1">
-                          {p.medicines.map((med, i) => (
-                            <span key={i} className="rounded-sm bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
-                              {med}
-                            </span>
-                          ))}
+                         {(p.medicines ?? "").split(",").map((med: string, i: number) => (
+  <span
+    key={i}
+    className="rounded-sm bg-primary/10 px-1.5 py-0.5 font-medium text-primary"
+  >
+    {med.trim()}
+  </span>
+))}
                         </div>
                       </div>
                       
                       <div className="flex items-center gap-2 shrink-0">
-                        {p.status === "New" && (
+                        {p.order_status === "New" && (
                           <>
                             <span className="font-semibold text-primary">New Order</span>
                             <button
@@ -177,7 +234,7 @@ export function PharmacyDashboard({ section }: { section: string }) {
                             </button>
                           </>
                         )}
-                        {p.status === "Being Prepared" && (
+                        {p.order_status === "Being Prepared" && (
                           <>
                             <span className="flex items-center gap-1 font-semibold text-blue-600">
                               <Clock className="h-3 w-3 animate-spin" /> Packaging
@@ -190,7 +247,7 @@ export function PharmacyDashboard({ section }: { section: string }) {
                             </button>
                           </>
                         )}
-                        {p.status === "Ready for Pickup" && (
+                        {p.order_status === "Ready for Pickup" && (
                           <>
                             <span className="flex items-center gap-1 font-semibold text-success">
                               <CheckCircle className="h-3 w-3" /> Waiting at Counter
@@ -203,7 +260,7 @@ export function PharmacyDashboard({ section }: { section: string }) {
                             </button>
                           </>
                         )}
-                        {p.status === "Dispensed" && (
+                        {p.order_status === "Dispensed" && (
                           <span className="flex items-center gap-1 font-semibold text-success/80 bg-success/5 border border-success/10 rounded-full px-2 py-0.5">
                             <CheckCircle className="h-3 w-3" /> Medicine Handed Over
                           </span>
@@ -218,10 +275,10 @@ export function PharmacyDashboard({ section }: { section: string }) {
           <div className="rounded-lg border border-border bg-card p-4 h-fit">
             <h3 className="text-sm font-semibold text-foreground border-b border-border pb-2">Recent Activity Log</h3>
             <div className="mt-3 space-y-2.5">
-              {ACTIVITY_LOG.map((log) => (
+              {activityLogs.map((log)=>(
                 <div key={log.id} className="flex flex-col gap-1 border-l-2 border-primary/30 bg-secondary/30 px-3 py-1.5 rounded-r-md">
                   <span className="shrink-0 text-[10px] font-mono text-muted-foreground">{log.time}</span>
-                  <p className="text-xs text-foreground/80 font-medium leading-normal">{log.action}</p>
+                  <p className="text-xs text-foreground/80 font-medium leading-normal">{log.description}</p>
                 </div>
               ))}
             </div>
@@ -236,7 +293,7 @@ export function PharmacyDashboard({ section }: { section: string }) {
      SECTION 2: MERGED INVENTORY & CRITICAL STOCK ALERTS MODULE
      ========================================================================= */
   if (section === "inventory" || section === "alerts") {
-    const activeAlerts = inventory.filter((m) => m.stock === 0 || m.stock <= m.reorder / 2)
+    const activeAlerts = inventory.filter((m) => m.current_stock === 0 || m.current_stock <= m.reorder_level / 2)
 
     return (
       <div className="space-y-4">
@@ -254,11 +311,11 @@ export function PharmacyDashboard({ section }: { section: string }) {
                   key={idx} 
                   className={cn(
                     "rounded px-2.5 py-1 text-[11px] font-medium border flex items-center gap-2",
-                    m.stock === 0 ? "bg-destructive/10 text-destructive border-destructive/20" : "bg-warning/10 text-warning border-warning/20"
+                    m.current_stock === 0 ? "bg-destructive/10 text-destructive border-destructive/20" : "bg-warning/10 text-warning border-warning/20"
                   )}
                 >
-                  <span className="font-bold">{m.name}</span>
-                  <span className="opacity-70">({m.stock === 0 ? "Out of stock" : `Low: ${m.stock} left`})</span>
+                  <span className="font-bold">{m.medicine_name}</span>
+                  <span className="opacity-70">({m.current_stock === 0 ? "Out of stock" : `Low: ${m.current_stock} left`})</span>
                 </div>
               ))}
             </div>
@@ -293,40 +350,49 @@ export function PharmacyDashboard({ section }: { section: string }) {
                 <tbody>
                   {inventory
                     .filter((m) =>
-                      m.name.toLowerCase().includes(searchQ.toLowerCase()),
+                      m.medicine_name.toLowerCase().includes(searchQ.toLowerCase()),
                     )
                     .map((m, idx) => {
                       let statusBg = "bg-success/10 text-success"
-                      if (m.stock === 0) statusBg = "bg-destructive/10 text-destructive"
-                      else if (m.stock <= m.reorder / 2) statusBg = "bg-warning/10 text-warning"
+                      if (m.current_stock === 0) statusBg = "bg-destructive/10 text-destructive"
+                      else if (m.current_stock <= m.reorder_level / 2) statusBg = "bg-warning/10 text-warning"
 
-                      const rackId = m.rack ? `Rack-${m.rack}` : null
+                      const rackId = m.rack_location
 
                       return (
-                        <tr
-                          key={idx}
-                          onMouseEnter={() => rackId && setActiveRackHover(rackId)}
-                          onMouseLeave={() => setActiveRackHover(null)}
-                          className={cn(
-                            "border-b border-border/50 transition duration-150",
-                            rackId && activeRackHover === rackId ? "bg-primary/5" : "hover:bg-secondary/30"
-                          )}
-                        >
-                          <td className="px-3 py-2 font-medium text-foreground">{m.name}</td>
+                      <tr
+  key={idx}
+  onClick={() => {
+    setSelectedMedicine(m)
+
+    const rack = `Rack-${m.rack_location.split("-")[0]}`
+
+    setActiveRackHover(rack)
+}}
+  className={cn(
+    "cursor-pointer border-b border-border/50 transition duration-150",
+    activeRackHover === m.rack_location
+      ? "bg-primary/10"
+      : "hover:bg-secondary/30"
+  )}
+>
+              
+                        
+                          <td className="px-3 py-2 font-medium text-foreground">{m.medicine_name}</td>
                           <td className="px-3 py-2 font-mono text-muted-foreground">
-                            {m.stock} / {m.reorder}
+                            {m.current_stock} / {m.reorder_level}
                           </td>
                           <td className="px-3 py-2">
                             <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", statusBg)}>
-                              {m.stock === 0 && "Out of Stock"}
-                              {m.stock > 0 && m.stock <= m.reorder / 2 && "Low Stock"}
-                              {m.stock > m.reorder / 2 && "Healthy"}
+                              {m.current_stock === 0 && "Out of Stock"}
+                              {m.current_stock > 0 && m.current_stock <= m.reorder_level / 2 && "Low Stock"}
+                              {m.current_stock > m.reorder_level / 2 && "Healthy"}
                             </span>
                           </td>
                           <td className="px-3 py-2 text-muted-foreground font-bold text-primary">
-                            {m.rack && m.shelf && m.boxNumber ? `${m.rack}-${m.shelf}-${m.boxNumber}` : "-"}
+                           {m.rack_location}
                           </td>
-                          <td className="px-3 py-2 text-muted-foreground">{m.expiryDate}</td>
+                          <td className="px-3 py-2 text-muted-foreground">{m.expiry_date}</td>
                         </tr>
                       )
                     })}
@@ -345,7 +411,7 @@ export function PharmacyDashboard({ section }: { section: string }) {
               Hover over an inventory list record to highlight its designated custom row coordinate box configuration below.
             </p>
             <div className="grid grid-cols-2 gap-3">
-              {["Rack-A", "Rack-B", "Rack-C", "Rack-D"].map((rack) => {
+              {["Rack-A","Rack-B","Rack-C","Rack-D","Rack-E"].map((rack) => {
                 const isMatch = activeRackHover === rack
                 return (
                   <div
@@ -365,9 +431,37 @@ export function PharmacyDashboard({ section }: { section: string }) {
                       <div className="h-2 rounded-sm bg-muted/40" />
                       <div className="h-2 rounded-sm bg-muted/40" />
                     </div>
-                    <span className="text-[10px] text-muted-foreground mt-2 uppercase tracking-widest font-medium">
-                      {isMatch ? "Located 🎯" : "Storage"}
-                    </span>
+                 <div className="mt-3 flex flex-col items-center gap-1">
+  {isMatch ? (
+    <>
+        <div className="text-sm font-bold text-primary">
+            📦 {selectedMedicine?.medicine_name}
+        </div>
+
+        <div className="text-xs">
+            📍 {selectedMedicine?.rack_location}
+        </div>
+
+        <div className="text-xs">
+            Stock : {selectedMedicine?.current_stock}
+        </div>
+
+        <div className="text-xs">
+            Expiry : {selectedMedicine?.expiry_date}
+        </div>
+
+        <div className="mt-2 rounded bg-green-100 px-2 py-1 text-green-700 text-xs font-semibold">
+            Located Here
+        </div>
+    </>
+) : (
+    <span className="text-[10px] text-muted-foreground uppercase">
+        Storage
+    </span>
+)}
+</div>
+  
+       
                   </div>
                 )
               })}
