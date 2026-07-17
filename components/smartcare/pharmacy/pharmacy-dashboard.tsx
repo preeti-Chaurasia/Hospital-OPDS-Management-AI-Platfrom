@@ -15,7 +15,7 @@ import {
   Layers,
   RefreshCw, // Loader for API transitions
 } from "lucide-react"
-import { PRESCRIPTIONS, MEDICINE_INVENTORY, AI_MEDICINE_INSIGHTS, type Prescription } from "@/lib/medical-data"
+import { PRESCRIPTIONS, MEDICINE_INVENTORY, type Prescription } from "@/lib/medical-data"
 import { cn } from "@/lib/utils"
 
 const ACTIVITY_LOG = [
@@ -39,25 +39,25 @@ export function PharmacyDashboard({ section }: { section: string }) {
   // ─── LIVE FETCHING CRITERIA FROM BACKEND API ───
   const fetchLiveAIPredictions = async () => {
     try {
-      const res = await fetch('/api/pharmacy')
+      const res = await fetch('/api/pharmacy/weather?city=Surat')
       if (res.ok) {
         const data = await res.json()
         setWeatherTelemetry(data.autonomousTelemetry)
 
-        // Maps backend inventory predictions dynamically to match your precise layout contract
-        const mappedInsights = data.inventory
+        // 🧠 FIXED CRITICAL MAP CONTRACT SCHEMA: 
+        const mappedInsights = (data.inventory || [])
           .filter((item: any) => item.ai_recommended_boost > 0)
           .map((item: any) => ({
-            title: `${item.medicine_name} - Surge Risk`,
-            description: item.ai_insight_message,
-            recommendation: `Boost stock balance by +${item.ai_recommended_boost} units immediately.`,
-            priority: item.ai_recommended_boost > 100 ? "high" : "medium"
+            medicine_name: item.medicine_name,
+            ai_insight_message: item.ai_insight_message,
+            ai_recommended_boost: item.ai_recommended_boost,
+            predicted_outbreak_disease: item.predicted_outbreak_disease || "None"
           }))
 
         // Fallback checks parameters if database constraints are cleared/empty during testing
         setAiInsightsList(mappedInsights.length > 0 ? mappedInsights : [
-          { title: "Normal Saline 1L - High Surge Risk", description: "AI Alert (XGBoost): High Humidity & Rain detected. Waterborne & vector outbreak index rising.", recommendation: "Boost stock balance by +200 units immediately.", priority: "high" },
-          { title: "Amoxicillin 500mg - Medium Risk", description: "AI Alert (XGBoost): Continuous seasonal precipitation shifts mapped.", recommendation: "Boost stock balance by +100 units immediately.", priority: "medium" }
+          { medicine_name: "Normal Saline 1L", ai_insight_message: "AI Alert (XGBoost): High Humidity & Rain detected. Waterborne & vector outbreak index rising.", ai_recommended_boost: 200, predicted_outbreak_disease: "Gastroenteritis" },
+          { medicine_name: "Amoxicillin 500mg", ai_insight_message: "AI Alert (XGBoost): Continuous seasonal precipitation shifts mapped.", ai_recommended_boost: 100, predicted_outbreak_disease: "Tropical Bacterial Infections" }
         ])
       }
     } catch (err) {
@@ -100,8 +100,8 @@ export function PharmacyDashboard({ section }: { section: string }) {
   const outOfStockCount = inventory.filter((m) => m.stock === 0).length
 
   /* =========================================================================
-     SECTION 1: UNIFIED PHARMACY DASHBOARD (MERGED WORKSPACE)
-     ========================================================================= */
+      SECTION 1: UNIFIED PHARMACY DASHBOARD (MERGED WORKSPACE)
+      ========================================================================= */
   if (section === "dashboard" || section === "prescriptions") {
     return (
       <div className="space-y-4">
@@ -233,8 +233,8 @@ export function PharmacyDashboard({ section }: { section: string }) {
   }
 
   /* =========================================================================
-     SECTION 2: MERGED INVENTORY & CRITICAL STOCK ALERTS MODULE
-     ========================================================================= */
+      SECTION 2: MERGED INVENTORY & CRITICAL STOCK ALERTS MODULE
+      ========================================================================= */
   if (section === "inventory" || section === "alerts") {
     const activeAlerts = inventory.filter((m) => m.stock === 0 || m.stock <= m.reorder / 2)
 
@@ -379,72 +379,92 @@ export function PharmacyDashboard({ section }: { section: string }) {
     )
   }
 
-     /* =========================================================================
-     SECTION 3: AI ENVIRONMENTAL DEMAND PREDICTIONS CONSOLE
-     ========================================================================= */
- // Is block ko single, bina double-return ke paste karna hai:
-  return (
-    <div className="space-y-4">
-      {/* Real-Time Environmental External Synced Node Widget */}
-      <div className="rounded-lg border border-primary/25 bg-primary/5 p-4 flex items-center justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-primary">
-            <CloudLightning className="h-5 w-5 animate-bounce" />
-            <span className="text-sm font-bold tracking-wide">AI Live Weather Intelligence Node</span>
-          </div>
-          <p className="text-xs text-foreground/80 font-medium">
-            Current Environment: <span className="font-bold text-primary">
-              {weatherTelemetry 
-                ? `${weatherTelemetry.city}: ${weatherTelemetry.temperature}°C, Humidity ${weatherTelemetry.humidity}% (${weatherTelemetry.apiRawCondition}) 🌧️`
-                : "Heavy Rainy Season & Monsoon Climate Detected 🌧️"
-              }
-            </span>
-          </p>
-          <p className="text-[11px] text-muted-foreground max-w-xl">
-            System is cross-referencing predictive external environmental patterns to auto-compile localized clinical demand modifications.
-          </p>
+ /* =========================================================================
+    SECTION 3: AI ENVIRONMENTAL DEMAND PREDICTIONS CONSOLE
+   ========================================================================= */
+return (
+  <div className="space-y-4">
+    {/* Real-Time Environmental External Synced Node Widget */}
+    <div className="rounded-lg border border-primary/25 bg-primary/5 p-4 flex items-center justify-between gap-4">
+      <div className="space-y-1">
+        <div className="flex items-center gap-2 text-primary">
+          <CloudLightning className="h-5 w-5 animate-bounce" />
+          <span className="text-sm font-bold tracking-wide">AI Live Weather Intelligence Node</span>
         </div>
-        <div className="rounded-full bg-primary/20 text-primary border border-primary/30 px-2 py-0.5 text-xs font-semibold shrink-0 hidden sm:inline-flex">
-          {apiLoading ? <RefreshCw className="h-3 w-3 animate-spin mr-1" /> : null}
-          Sync Status: Operational
-        </div>
+        <p className="text-xs text-foreground/80 font-medium">
+          Current Environment: <span className="font-bold text-primary">
+            {weatherTelemetry 
+              ? `${weatherTelemetry.city}: ${weatherTelemetry.temperature}°C, Humidity ${weatherTelemetry.humidity}% (${weatherTelemetry.apiRawCondition})`
+              : "Synchronizing Regional Meteorological Telemetry..."
+            }
+          </span>
+        </p>
+        <p className="text-[11px] font-bold text-amber-600 animate-pulse mt-1">
+          🌍 Active Framework State: {weatherTelemetry?.condition || "Detecting Cloud Analytics..."}
+        </p>
       </div>
+      <div className="rounded-full bg-primary/20 text-primary border border-primary/30 px-2 py-0.5 text-xs font-semibold shrink-0 hidden sm:inline-flex">
+        {apiLoading ? <RefreshCw className="h-3 w-3 animate-spin mr-1" /> : null}
+        Sync Status: Operational
+      </div>
+    </div>
 
-      {/* SECTION 3: AI ENVIRONMENTAL DEMAND PREDICTIONS CONSOLE */}
-      <div className="rounded-lg border border-border bg-card p-4">
-        <h3 className="text-sm font-semibold text-foreground">AI Medicine Demand Predictions</h3>
-        <p className="mt-1 text-xs text-muted-foreground">Powered by seasonal patterns & weather trends</p>
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {aiInsightsList.map((insight, idx) => (
+    {/* SECTION 3: AI ENVIRONMENTAL DEMAND PREDICTIONS CONSOLE */}
+    <div className="rounded-lg border border-border bg-card p-4">
+      <h3 className="text-sm font-semibold text-foreground">AI Medicine Demand Predictions</h3>
+      <p className="mt-1 text-xs text-muted-foreground">Powered by seasonal patterns & weather trends</p>
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {aiInsightsList.map((insight, idx) => {
+          const title = insight.medicine_name || "Unknown Medicine Asset";
+          const recommendation = insight.ai_insight_message || "Stock Verified - Stable Demand Channel.";
+          const boostUnits = insight.ai_recommended_boost || 0;
+          const disease = insight.predicted_outbreak_disease || "General Outbreak";
+          
+          const priority = boostUnits > 45 ? "high" : boostUnits > 0 ? "medium" : "low";
+
+          // 🔥 FIXED: Absolute Dynamic Outbreak Mappings System!
+          const description = (disease && disease !== "None" && disease !== "General Outbreak")
+            ? `Risk Indication Matrix: High threat of ${disease} in local sectors.`
+            : "Chronic Clinical Maintenance & Baseline Balance State.";
+
+          return (
             <div
               key={idx}
               className={cn(
                 "rounded-lg border p-3",
-                insight.priority === "high"
+                priority === "high"
                   ? "border-destructive/30 bg-destructive/5"
-                  : insight.priority === "medium"
+                  : priority === "medium"
                     ? "border-warning/30 bg-warning/5"
                     : "border-primary/30 bg-primary/5"
               )}
             >
               <div className="flex items-start gap-3">
                 <div className="shrink-0">
-                  {insight.priority === "high" && <AlertTriangle className="h-5 w-5 text-destructive" />}
-                  {insight.priority === "medium" && <AlertCircle className="h-5 w-5 text-warning" />}
-                  {insight.priority === "low" && <Pill className="h-5 w-5 text-primary" />}
+                  {priority === "high" && <AlertTriangle className="h-5 w-5 text-destructive" />}
+                  {priority === "medium" && <AlertCircle className="h-5 w-5 text-warning" />}
+                  {priority === "low" && <Pill className="h-5 w-5 text-primary" />}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-foreground">{insight.title}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{insight.description}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-semibold text-foreground truncate text-sm">{title}</p>
+                    {boostUnits > 0 && (
+                      <span className="text-[9px] font-bold uppercase bg-destructive text-destructive-foreground px-1.5 py-0.5 rounded tracking-wider shrink-0 animate-pulse">
+                        +{boostUnits} Units
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">{description}</p>
                   <div className="mt-2 rounded-md bg-secondary/30 px-2 py-1.5">
-                    <p className="text-xs font-medium text-foreground">💡 {insight.recommendation}</p>
+                    <p className="text-xs font-medium text-foreground">💡 {recommendation}</p>
                   </div>
                 </div>
               </div>
             </div>
-          ))}
-        </div>
+          );
+        })}
       </div>
     </div>
-  )
+  </div>
+);
 }
