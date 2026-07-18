@@ -40,7 +40,7 @@ const NAV: Record<Role, NavItem[]> = {
     { key: "command", label: "Command Center", icon: <Stethoscope className="h-4 w-4" /> },
     { key: "beds", label: "Bed Management", icon: <Bed className="h-4 w-4" /> },
     { key: "medicines", label: "Medicine Database", icon: <Pill className="h-4 w-4" /> },
-    { key: "labs", label: "Lab Reports", icon: <FlaskConical className="h-4 w-4" /> },
+
   ],
   admin: [
     { key: "overview", label: "Operations Overview", icon: <BarChart3 className="h-4 w-4" /> },
@@ -52,6 +52,7 @@ const NAV: Record<Role, NavItem[]> = {
     { key: "dashboard", label: "Dashboard", icon: <LayoutDashboard className="h-4 w-4" /> },
     { key: "registration", label: "Patient Registration", icon: <UserPlus className="h-4 w-4" /> },
     { key: "labs", label: "Lab Reports", icon: <FileText className="h-4 w-4" /> },
+        { key: "beds", label: "Bed Allocation Matrix", icon: <Bed className="h-4 w-4" /> },
   ],
   pharmacy: [
     { key: "dashboard", label: "Dashboard", icon: <LayoutDashboard className="h-4 w-4" /> },
