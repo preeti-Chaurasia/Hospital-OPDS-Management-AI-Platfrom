@@ -13,33 +13,31 @@ export async function speakAzure(
     );
 
     // Language
-    switch(language){
+    switch (language) {
 
-      case "hi":
-        speechConfig.speechSynthesisVoiceName =
-          "hi-IN-SwaraNeural";
-        break;
+  case "hi-IN":
+    speechConfig.speechSynthesisVoiceName = "hi-IN-SwaraNeural";
+    break;
 
-      case "gu":
-        speechConfig.speechSynthesisVoiceName =
-          "gu-IN-DhwaniNeural";
-        break;
+  case "gu-IN":
+    speechConfig.speechSynthesisVoiceName = "gu-IN-DhwaniNeural";
+    break;
 
-      case "mr":
-        speechConfig.speechSynthesisVoiceName =
-          "mr-IN-AarohiNeural";
-        break;
+  case "mr-IN":
+    speechConfig.speechSynthesisVoiceName = "mr-IN-AarohiNeural";
+    break;
 
-      case "ta":
-        speechConfig.speechSynthesisVoiceName =
-          "ta-IN-PallaviNeural";
-        break;
+  case "ta-IN":
+    speechConfig.speechSynthesisVoiceName = "ta-IN-PallaviNeural";
+    break;
 
-      default:
-        speechConfig.speechSynthesisVoiceName =
-          "en-IN-NeerjaNeural";
-    }
+  case "te-IN":
+    speechConfig.speechSynthesisVoiceName = "te-IN-ShrutiNeural";
+    break;
 
+  default:
+    speechConfig.speechSynthesisVoiceName = "en-IN-NeerjaNeural";
+}
     const synthesizer =
       new sdk.SpeechSynthesizer(speechConfig);
 

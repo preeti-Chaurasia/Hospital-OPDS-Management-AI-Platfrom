@@ -4,7 +4,10 @@ const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY!,
 });
 
-export async function chatWithAI(message: string) {
+export async function chatWithAI(
+  message: string,
+  selectedLanguage?: string
+) {
 
 const prompt = `
 You are SmartCare AI Intent Engine for a Hospital.
@@ -213,6 +216,14 @@ Return ONLY this JSON
       "symptoms":""
   }
 }
+  Preferred language selected by user:
+
+${selectedLanguage}
+
+If user selected a language from dropdown,
+always return that language code.
+
+Do NOT auto-detect another language unless no language is provided.
 
 Patient message:
 
