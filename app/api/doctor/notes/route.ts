@@ -9,7 +9,7 @@ try{
 
 const body = await req.json()
 
-
+console.log("Received Body:", body)
 const {
   appointment_id,
   doctor_id,
