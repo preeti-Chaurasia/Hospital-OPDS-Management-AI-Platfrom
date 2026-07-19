@@ -43,7 +43,7 @@ interface ChatMsg {
   text: string
 }
 
-// Global Keywords & Datasets for AI Triage Engine
+
 const SYMPTOM_KEYWORDS = [
   "fever", "pain", "cough", "headache", "nausea", "breath", "dizzy", 
   "migraine", "chest pain", "heart", "skin", "rash", "cold", "body ache", "vomiting"
@@ -527,10 +527,7 @@ const dummyVitals =
     </div>
   )
 }
-
-/* =========================================================================
-   SUB-COMPONENT 2: Voice Receptionist (💯 100% ORIGINAL - UNTOUCHED)
-   ========================================================================= */
+   //SUB-COMPONENT 2: Voice Receptionist 
 function VoiceReceptionist({
   form,
   onTriage,
@@ -550,6 +547,22 @@ function VoiceReceptionist({
     },
   ])
   const [flash, setFlash] = useState<string | null>(null)
+  const [patientMemory, setPatientMemory] = useState({
+  name: "Marcous Delgado",
+  age: "24",
+  phone: "9876543210",
+  gender: "Male",
+  symptoms: "",
+});
+
+const patientMemoryRef = useRef({
+  name: "Marcous Delgado",
+  age: "24",
+  phone: "9876543210",
+  gender: "Male",
+  symptoms: "",
+});
+
   const recognitionRef = useRef<any>(null)
   const idRef = useRef(1)
 
@@ -576,75 +589,188 @@ function VoiceReceptionist({
     setMessages((m) => [...m, { id: idRef.current++, from, text }])
   }
 
-  function speak(text: string) {
-    if ("speechSynthesis" in window) {
-      const utterance = new SpeechSynthesisUtterance(text)
-      utterance.rate = 1
-      utterance.pitch = 1
-      speechSynthesis.speak(utterance)
+  async function speak(text:string,language="en"){
+
+const res=await fetch("/api/speech",{
+
+method:"POST",
+
+headers:{
+
+"Content-Type":"application/json"
+
+},
+
+body:JSON.stringify({
+
+text,
+
+language
+
+})
+
+});
+
+const blob=await res.blob();
+
+const url=URL.createObjectURL(blob);
+
+const audio=new Audio(url);
+
+audio.play();
+
+}
+
+ async function handleTranscript(transcript: string) {
+
+  pushMsg("user", transcript);
+
+  try {
+
+    const response = await fetch("/api/ai/chat", {
+
+      method: "POST",
+
+      headers: {
+        "Content-Type": "application/json",
+      },
+
+      body: JSON.stringify({
+        message: transcript,
+      }),
+
+    });
+
+    const data = await response.json();
+    const ai = data;
+
+    console.log("Backend Response:", data);
+
+    if (!data.success) {
+
+      pushMsg("bot", "Server Error");
+      return;
+
     }
+
+    let answer = "";
+
+  if (ai.intent === "doctor_availability") {
+
+    if (ai.doctor) {
+
+        answer = `
+${ai.doctor.full_name} is available.
+
+Cabin : ${ai.doctor.cabin_number}
+
+Floor : ${ai.doctor.floor}
+
+Queue : ${ai.doctor.current_queue}
+`;
+
+    } else {
+
+        answer = "Sorry, no doctor found.";
+
+    }
+
+}
+
+   else if (ai.intent === "department_location") {
+
+    if(ai.department){
+
+        answer = `${ai.department.specialization} Department is located on Floor ${ai.department.floor}, Cabin ${ai.department.cabin_number}.`;
+
+    }else{
+
+        answer="Department not found.";
+
+    }
+
+}
+else if (ai.intent === "registration") {
+
+  if (ai.registration.symptoms) {
+
+  patientMemoryRef.current.symptoms = ai.registration.symptoms;
+
+  setPatientMemory(prev => ({
+    ...prev,
+    symptoms: ai.registration.symptoms,
+  }));
+
+}
+
+  const msg = transcript.toLowerCase();
+
+  const wantsRegistration =
+    msg.includes("register") ||
+    msg.includes("registration") ||
+    msg.includes("fill") ||
+    msg.includes("form") ||
+    msg.includes("appointment") ||
+
+    // Hindi
+    msg.includes("रजिस्ट्रेशन") ||
+    msg.includes("फॉर्म") ||
+    msg.includes("पंजीकरण");
+
+  // -----------------------------
+  // Only symptoms spoken
+  // -----------------------------
+  if (!wantsRegistration) {
+
+    answer =
+      "Okay. I have saved your symptoms. Whenever you are ready, just say 'Registration'.";
+
   }
 
-  function handleTranscript(transcript: string) {
-    pushMsg("user", transcript)
-    const lower = transcript.toLowerCase()
+  // -----------------------------
+  // User wants registration
+  // -----------------------------
+  else {
 
-    if (
-      lower.includes("register") || 
-      lower.includes("form") || 
-      lower.includes("fill") || 
-      lower.includes("open form") ||
-      lower.includes("haan") ||
-      lower.includes("yes")
-    ) {
-      onTriage({
-        name: "Marcus Delgado",
-        age: "21",
-        phone: "+91 9876543210",
-        symptoms: form.symptoms || transcript,
-      })
+  const finalSymptoms =
+  ai.registration.symptoms ||
+  patientMemoryRef.current.symptoms;
 
-      const answer = "I have successfully prepared your registration form with your stated symptoms. You can click 'Open Form' whenever you are ready."
-      pushMsg("bot", answer)
-      speak(answer)
-      setFlash("Registration prepared successfully • Dynamic Symptoms Linked")
-      return
-    }
+onTriage({
+  name: patientMemoryRef.current.name,
+  age: patientMemoryRef.current.age,
+  phone: patientMemoryRef.current.phone,
+  symptoms: finalSymptoms,
+});
+    onGoRegister();
 
-    const faqMatch = HOSPITAL_FAQS.find((faq) =>
-      faq.keywords.some((k) => lower.includes(k))
-    )
+    answer = "Your registration form is ready.";
 
-    if (faqMatch) {
-      pushMsg("bot", faqMatch.answer)
-      speak(faqMatch.answer)
-      return
-    }
-
-    const deptMatch = DEPARTMENTS.find((d) =>
-      d.symptoms.some((s) => lower.includes(s))
-    )
-
-    if (deptMatch) {
-      onTriage({
-        name: "Marcus Delgado",
-        age: "21",
-        phone: "+91 9876543210",
-        symptoms: transcript, 
-      })
-
-      const answer = `I see. Based on your symptoms, I recommend visiting ${deptMatch.department} at ${deptMatch.room}. Would you like me to fill out your registration form? Just say "Fill the form" or "Register".`
-      pushMsg("bot", answer)
-      speak(answer)
-      setFlash(`${deptMatch.department} recommended • Symptoms updated dynamically`)
-      return
-    }
-
-    const fallback = "I can help with Department locations, Doctor availability, Queue wait times, or Symptom triage. Try saying: 'I have a fever' or 'Where is Cardiology?'"
-    pushMsg("bot", fallback)
-    speak(fallback)
   }
 
+}
+
+else {
+
+    answer = ai.reply || "I couldn't understand.";
+
+}
+
+    pushMsg("bot", answer);
+
+    await speak(answer, ai.language);
+
+  }
+
+  catch (err) {
+
+    console.log(err);
+
+    pushMsg("bot", "Unable to connect server.");
+
+  }
+
+}
   function toggleListen() {
     if (!supported) {
       handleTranscript("I have a high fever and severe body ache, please register my form.")

@@ -1,41 +1,205 @@
-import { GoogleGenAI } from "@google/genai";
+import Groq from "groq-sdk";
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY!,
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY!,
 });
 
 export async function chatWithAI(message: string) {
 
 const prompt = `
-You are SmartCare AI Intent Engine.
+You are SmartCare AI Intent Engine for a Hospital.
 
-You NEVER answer hospital questions.
+Your ONLY task is to classify the patient's message and extract information.
 
-Your job is ONLY to detect:
+DO NOT explain anything.
+DO NOT answer medical questions.
+DO NOT generate long sentences.
 
-1. intent
-2. detected language
-3. extracted entities
+Always return ONLY valid JSON.
 
-Return ONLY JSON.
+-----------------------------
+SUPPORTED LANGUAGES
+-----------------------------
+English (en)
+Hindi (hi)
+Hinglish (hi)
 
-Possible intents:
+Detect the user's language automatically.
+
+-----------------------------
+SUPPORTED INTENTS
+-----------------------------
 
 doctor_availability
-
 department_location
-
 queue_status
-
 hospital_faq
-
 registration
-
 prescription_explain
-
 general_chat
 
-JSON:
+-----------------------------
+SUPPORTED DEPARTMENTS
+-----------------------------
+
+General Medicine
+Cardiology
+Dermatology
+Neurology
+Orthopedics
+Pediatrics
+Gynecology
+
+-----------------------------
+INTENT RULES
+-----------------------------
+
+If the patient asks where a department, doctor, room, cabin or floor is located
+
+Examples:
+
+Where is Cardiology?
+Where is Dermatology?
+Cardiology department?
+Where can I find Neurology?
+Which floor is Cardiology?
+Cardiology room?
+
+Return
+
+intent = department_location
+
+entity = Department Name
+
+-----------------------------
+
+If the patient asks whether a doctor is available
+
+Examples
+
+Is cardiologist available?
+Can I meet skin doctor?
+Dermatologist available?
+Heart doctor available?
+Is neurologist available?
+
+Return
+
+intent = doctor_availability
+
+entity = Department Name
+
+-----------------------------
+
+If the patient tells symptoms
+
+Examples
+
+I have fever
+I have headache
+My chest hurts
+I am coughing
+I have cold
+I have skin allergy
+My leg is fractured
+मुझे बुखार है
+मेरे सिर में दर्द है
+सीने में दर्द है
+मुझे खांसी है
+
+Return
+
+intent = registration
+
+Map symptoms
+
+fever
+cold
+cough
+body pain
+vomiting
+stomach pain
+
+-> General Medicine
+
+headache
+migraine
+dizziness
+
+-> Neurology
+
+chest pain
+heart pain
+breathing problem
+
+-> Cardiology
+
+rash
+skin allergy
+itching
+
+-> Dermatology
+
+fracture
+leg pain
+bone pain
+
+-> Orthopedics
+
+child fever
+
+-> Pediatrics
+
+pregnancy
+period pain
+
+-> Gynecology
+
+Store ONLY symptoms in registration.symptoms.
+
+-----------------------------
+
+Queue related
+
+How much waiting?
+Queue status?
+My token?
+How many patients ahead?
+
+intent = queue_status
+
+-----------------------------
+
+Prescription
+
+Explain my prescription
+Medicine meaning
+How to take medicine
+
+intent = prescription_explain
+
+-----------------------------
+
+Hospital FAQ
+
+Hospital timings
+Parking
+Billing
+Emergency
+Cafeteria
+Reception
+
+intent = hospital_faq
+
+-----------------------------
+
+Everything else
+
+intent = general_chat
+
+-----------------------------
+
+Return ONLY this JSON
 
 {
   "intent":"",
@@ -49,48 +213,33 @@ JSON:
       "symptoms":""
   }
 }
-  Entity means:
 
-If patient asks
-
-Where is Cardiology
-
-entity = Cardiology
-
-Doctor available in Dermatology
-
-entity = Dermatology
-
-General Medicine doctor
-
-entity = General Medicine
-
-Return only department/specialization name.
-
-Patient:
+Patient message:
 
 ${message}
-
 `;
 
-const response = await ai.models.generateContent({
+const completion = await groq.chat.completions.create({
 
-model:"gemini-2.5-flash",
+model: "llama-3.3-70b-versatile",
 
-contents:prompt
+messages: [
+{
+role: "user",
+content: prompt,
+},
+],
+
+temperature: 0,
+
+response_format: {
+type: "json_object",
+},
 
 });
 
-const text=response.text??"";
+const text = completion.choices[0].message.content ?? "{}";
 
-const cleaned=text
-
-.replace(/```json/g,"")
-
-.replace(/```/g,"")
-
-.trim();
-
-return JSON.parse(cleaned);
+return JSON.parse(text);
 
 }
