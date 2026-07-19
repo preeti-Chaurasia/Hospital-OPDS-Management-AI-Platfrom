@@ -102,7 +102,7 @@ prescriptions.map((p)=>
 
 p.prescription_id===id
 
-? {...p,order_status:"Being Prepared"}
+? {...p,order_status:"Preparing"}
 
 :p
 
@@ -120,7 +120,7 @@ prescriptions.map((p)=>
 
 p.prescription_id===id
 
-? {...p,order_status:"Dispensed"}
+? {...p,order_status:"Medicine Handed Over"}
 
 :p
 
@@ -147,12 +147,27 @@ p.prescription_id===id
 )
 
 }
+const handleMoveCounter = (id:number) => {
 
-  const readyCount = (prescriptions ?? []).filter(
-    (p) =>
-      p.order_status === "Ready" ||
-      p.order_status === "Dispensed"
-  ).length;
+  setPrescriptions(
+
+    prescriptions.map((p) =>
+
+      p.prescription_id === id
+        ? { ...p, order_status: "Waiting at Counter" }
+        : p
+
+    )
+
+  )
+
+}
+
+const readyCount = (prescriptions ?? []).filter(
+  (p) =>
+    p.order_status === "Ready" ||
+    p.order_status === "Waiting at Counter"
+).length;
 
   const lowStockCount = (inventory ?? []).filter(
     (m) =>
@@ -210,7 +225,8 @@ p.prescription_id===id
 
             <div className="space-y-2.5 overflow-y-auto pr-1" style={{ maxHeight: 380 }}>
               {prescriptions
-               .filter((p) => {
+.filter((p)=>p.order_status !== "Medicine Handed Over")
+.filter((p)=>{
   const name = p.full_name ?? "";
   const medicines = p.medicines ?? "";
 
@@ -241,7 +257,7 @@ p.prescription_id===id
                       </div>
 
                       <div className="flex items-center gap-2 shrink-0">
-                        {p.order_status === "New" && (
+                        {p.order_status==="New Order" && (
                           <>
                             <span className="font-semibold text-primary">New Order</span>
                             <button
@@ -252,7 +268,7 @@ p.prescription_id===id
                             </button>
                           </>
                         )}
-                        {p.order_status === "Being Prepared" && (
+                        {p.order_status==="Preparing" && (
                           <>
                             <span className="flex items-center gap-1 font-semibold text-blue-600">
                               <Clock className="h-3 w-3 animate-spin" /> Packaging
@@ -265,8 +281,41 @@ p.prescription_id===id
                             </button>
                           </>
                         )}
-                        {p.order_status === "Ready for Pickup" && (
+                        {p.order_status==="Waiting at Counter" && (
                           <>
+
+                          {p.order_status=="Preparing" && (
+  <>
+    <span className="flex items-center gap-1 font-semibold text-blue-600">
+      <Clock className="h-3 w-3 animate-spin" /> Packaging
+    </span>
+    <button
+      onClick={() => handleMarkReady(p.prescription_id)}
+      className="rounded-md bg-success/10 px-2.5 py-1 text-[11px] font-medium text-success hover:bg-success/20"
+    >
+      Ready
+    </button>
+  </>
+)}
+
+
+
+{p.order_status=="Ready" && (
+  <>
+    <span className="flex items-center gap-1 font-semibold text-green-600">
+      <CheckCircle className="h-3 w-3" />
+      Ready for Pickup
+    </span>
+
+    <button
+      onClick={() => handleMoveCounter(p.prescription_id)}
+      className="rounded-md bg-blue-100 px-2.5 py-1 text-[11px] font-medium text-blue-600"
+    >
+      Move to Counter
+    </button>
+  </>
+
+)}
                             <span className="flex items-center gap-1 font-semibold text-success">
                               <CheckCircle className="h-3 w-3" /> Waiting at Counter
                             </span>
@@ -278,7 +327,7 @@ p.prescription_id===id
                             </button>
                           </>
                         )}
-                        {p.order_status === "Dispensed" && (
+                        {p.order_status==="Medicine Handed Over" && (
                           <span className="flex items-center gap-1 font-semibold text-success/80 bg-success/5 border border-success/10 rounded-full px-2 py-0.5">
                             <CheckCircle className="h-3 w-3" /> Medicine Handed Over
                           </span>

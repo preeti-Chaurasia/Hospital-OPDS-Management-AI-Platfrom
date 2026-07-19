@@ -44,7 +44,7 @@ const [queue,setQueue]=useState<QueuePatient[]>([])
 
 const [activePatient,setActivePatient] =
 useState<QueuePatient | null>(null)
-
+const [isAdmitModalOpen, setIsAdmitModalOpen] = useState(false);
 
 const [backupPatient,setBackupPatient] =
 useState<QueuePatient | null>(null)
@@ -52,8 +52,7 @@ useState<QueuePatient | null>(null)
   const [selectedLab,setSelectedLab]=useState("")
   const [selectedOrder,setSelectedOrder]=useState<any>(null)
   // Backup pointer to remember which patient was open before clicking the buffer slot
-  
-  const [isAdmitModalOpen, setIsAdmitModalOpen] = useState(false)
+
   const [emergencyMode, setEmergencyMode] = useState(false)
   const [labReports,setLabReports]=useState<any[]>([])
   // Clinical States Form Input
@@ -81,18 +80,17 @@ useEffect(() => {
 
   loadQueue()
 
-  socket.on("queueUpdated",(newQueue)=>{
+socket.on("queueUpdated", (newQueue) => {
+  setQueue(newQueue);
 
-    setQueue(newQueue)
-
-    if(newQueue.length>0 && !activePatient){
-
-      setActivePatient(newQueue[0])
-      setBackupPatient(newQueue[0])
-
-    }
-
-  })
+  if (newQueue.length > 0) {
+    setActivePatient(newQueue[0]);
+    setBackupPatient(newQueue[0]);
+  } else {
+    setActivePatient(null);
+    setBackupPatient(null);
+  }
+});
 
   return ()=>{
 
@@ -177,69 +175,64 @@ const [selectedBed, setSelectedBed] = useState<any>(null)
 
   // ─── NEW HANDLER: DIRECT ALLOCATION FLOW FLIPPER
   //  ───
-const handleDischargePatient = async(bedId:string)=>{
 
+  const handleAdmissionRequest = async () => {
+  if (!activePatient) {
+    alert("No patient selected");
+    return;
+  }
 
-try{
+  console.log("Sending Admission Request");
 
+  try {
+    const res = await fetch("/api/doctor/admission-request", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        appointment_id: activePatient.appointmentId,
+        patient_id: activePatient.id,
+        doctor_id: 1,
+        diagnosis_code: selectedDiagnosis,
+        progress_note: progressNote,
+        status: "Pending",
+      }),
+    });
 
-const res = await fetch("/api/doctor/beds/discharge",
-{
+    console.log("Status:", res.status);
 
-method:"POST",
+    const data = await res.json();
+    console.log("Response:", data);
 
-headers:{
-"Content-Type":"application/json"
-},
+   if (data.success) {
+  alert("Admission Request Sent");
 
-body:JSON.stringify({
+  socket.emit("admissionRequestAdded");
 
-bed_id:bedId
+  const updatedQueue = queue.filter(
+    (p) => p.id !== activePatient.id
+  );
 
-})
+  setQueue(updatedQueue);
 
-})
+  if (updatedQueue.length > 0) {
+    setActivePatient(updatedQueue[0]);
+    setBackupPatient(updatedQueue[0]);
+  } else {
+    setActivePatient(null);
+    setBackupPatient(null);
+  }
 
-
-const data = await res.json()
-
-
-if(data.success){
-
-socket.emit("refreshBeds")
-setBeds((prev)=>
-
-prev.map((b)=>
-Number(b.bed_id)===Number(bedId)
-
-?
-{
-...b,
-status:"Cleaning Required"
-}
-
-:
-b
-
-)
-
-)
-
-
-alert("Patient Discharged")
-
-}
-
-
-}
-catch(error){
-
-console.log("Discharge Error",error)
-
-}
-
-
-}
+  setIsAdmitModalOpen(false);
+} else {
+      alert(data.message || "Admission Failed");
+    }
+  } catch (err) {
+    console.error(err);
+    alert("Server Error");
+  }
+};
 const handleSavePrescription = async()=>{
 
 try{
@@ -350,66 +343,6 @@ socket.off("bedsUpdated")
 
 },[])
 
-const handleAdmitPatient = async()=>{
-
-
-if(!selectedBed || !activePatient)
-return
-
-
-
-const res = await fetch(
-"/api/doctor/admission",
-{
-
-method:"POST",
-
-headers:{
-"Content-Type":"application/json"
-},
-
-body:JSON.stringify({
-
-appointment_id:
-activePatient.appointmentId,
-
-patient_id:
-activePatient.id,
-
-doctor_id:1,
-
-bed_id:
-selectedBed.bed_id
-
-})
-
-}
-
-)
-
-
-const data = await res.json()
-
-
-
-if(data.success){
-socket.emit("refreshQueue")
-socket.emit("refreshBeds")
-alert("Patient Admitted")
-
-setQueue(prev=>
-prev.filter(
-p=>p.id!==activePatient.id
-)
-)
-
-setActivePatient(null)
-setIsAdmitModalOpen(false)
-
-
-}
-
-}
 const handleSaveNotes = async()=>{
 
 
@@ -434,10 +367,9 @@ activePatient?.appointmentId,
 
 doctor_id:1,
 
-diagnosis:selectedDiagnosis,
+diagnosis_code: selectedDiagnosis,
 
-clinical_note:progressNote
-
+progress_note: progressNote
 })
 
 
@@ -447,11 +379,11 @@ clinical_note:progressNote
 
 
 const data = await res.json()
-
+console.log("Response", data);
 
 if(data.success){
 
-alert("Notes Saved")
+alert("Notes Saved ")
 
 }
 
@@ -841,48 +773,6 @@ className="bg-blue-600 text-white p-2 rounded"
 Request Lab Test
 </button>
                   </div>
-                 {labReports.length > 0 && (
-
-<div className="border rounded p-3">
-
-<h3 className="font-bold mb-2">
-Lab Reports
-</h3>
-
-{labReports.map((r)=>(
-
-<div
-key={r.report_id}
-onClick={()=>setSelectedOrder(r)}
-className="border p-2 mt-2 rounded cursor-pointer hover:bg-gray-100"
->
-
-<p>{r.report_name}</p>
-
-<p>Status: {r.status}</p>
-
-<p>{r.remarks}</p>
-
-{r.file_path && (
-
-<a
-href={r.file_path}
-target="_blank"
-rel="noopener noreferrer"
-className="text-blue-600 underline"
->
-View Report
-</a>
-
-)}
-
-</div>
-
-))}
-
-</div>
-
-)}
 
                   {/* ─── ✅ DYNAMIC LIVE INVENTORY ALERT BANNER CONTAINER ─── */}
                   {stockWarning && (
@@ -981,44 +871,11 @@ prev=>prev.filter(
                     <button onClick={handleSkipPatient} className="rounded-md border border-border bg-card py-2 text-xs font-semibold text-foreground hover:bg-accent transition">
                       Skip Patient
                     </button>
-                    <button onClick={() => setIsAdmitModalOpen(true)} className="rounded-md bg-amber-600/10 border border-amber-600/20 py-2 text-xs font-bold text-amber-700 hover:bg-amber-600/20 transition">
-                      Admit Patient
-                    </button>
-                    
-<button
-
-onClick={() => {
-
-if(!selectedBed){
-alert("Please select a bed first")
-return
-}
-
-if(selectedBed.bed_id==null){
-alert("Invalid Bed")
-return
-}
-
-handleDischargePatient(
-String(selectedBed.bed_id)
-)
-
-}}
-
-className="rounded-md bg-red-600 text-white py-2 text-xs font-bold"
-
+            <button
+  onClick={() => setIsAdmitModalOpen(true)}
+  className="rounded-md bg-amber-600 text-white py-2 text-xs font-bold"
 >
-Discharge Patient
-</button>
-<button
-
-onClick={handleAdmitPatient}
-
-className="w-full bg-green-600 text-white py-2 rounded"
-
->
-Confirm Admission
-
+  Admit Patient
 </button>
 
 
@@ -1047,86 +904,41 @@ Confirm Admission
 
 
       {/* ─── BED MANAGEMENT POPUP: MODIFIED STYLES & EXCLUSIVE FILTERS FOR DOCTOR VIEW ─── */}
-      {isAdmitModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs">
-          <div className="w-full max-w-2xl rounded-xl border border-border bg-card p-5 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-border pb-2.5">
-              <div>
-                <h3 className="text-sm font-bold text-foreground uppercase tracking-wide">Available Bed Allocation Matrix</h3>
-                <p className="text-[11px] text-muted-foreground mt-0.5">Filtering strictly for <span className="text-success font-semibold">Available</span> & <span className="text-warning font-semibold">Vacating Soon</span> beds.</p>
-              </div>
-              <button onClick={() => setIsAdmitModalOpen(false)} className="rounded p-1 hover:bg-secondary"><X className="h-4 w-4" /></button>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 text-xs font-medium">
-              {/* 🔴 EXCLUSIVE STRICT FILTER LOOP RENDERING */}
-              {beds.map((bed,index) => (
-                <div
-key={`${bed.bed_id}-${bed.bed_number}-${index}`}
-onClick={()=>setSelectedBed(bed)}
-className={cn(
-"border p-3 rounded-lg text-center cursor-pointer transition",
-BED_STATUS_STYLES[
- bed.status as keyof typeof BED_STATUS_STYLES
-] || "bg-gray-100"
-)}
+     {isAdmitModalOpen && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+
+    <div className="w-full max-w-md rounded-xl bg-card p-6 shadow-xl">
+
+      <h2 className="text-lg font-bold">
+        Admit Patient
+      </h2>
+
+      <p className="mt-3 text-sm text-muted-foreground">
+        This patient will be sent to the Admission Team.
+        Bed allocation will be handled by Staff/Admin.
+      </p>
+
+      <div className="mt-6 flex justify-end gap-3">
+
+        <button
+          onClick={() => setIsAdmitModalOpen(false)}
+          className="px-4 py-2 border rounded"
+        >
+          Cancel
+        </button>
+
+    <button
+  onClick={handleAdmissionRequest}
+  className="px-4 py-2 rounded bg-green-600 text-white"
 >
-                    <p className="font-bold text-sm">{bed.bed_id}</p>
-                   <p className="font-bold text-sm">
- {bed.bed_number}
-</p>
+  Send Admission Request
+</button>
 
-<p className="text-[10px]">
- {bed.ward_name}
-</p>
-                    <span className="text-[9px] mt-2 block font-semibold px-1 py-0.5 rounded bg-background/50 uppercase tracking-wide">
-                      {bed.status}
-                    </span>
-                  </div>
-                ))}
-            </div>
-
-
-{selectedBed && (
-  <div className="mt-4 rounded-lg border p-4 bg-card">
-    <h3 className="font-bold text-lg">Bed Details</h3>
-
-    <p>
-<strong>Bed Number:</strong> 
-{selectedBed.bed_number}
-</p>
-
-<p>
-<strong>Ward:</strong>
-{selectedBed.ward_name}
-</p>
-
-<p>
-<strong>Status:</strong>
-{selectedBed.status}
-</p>
-
-<p>
-<strong>Last Updated:</strong>
-{selectedBed.last_updated}
-</p>
-    <p><strong>Last Updated:</strong> {selectedBed.last_updated}</p>
-
-  
-  </div>
-)}
-
-
-            {/* Empty check helper context */}
-            {beds.filter((bed) => bed.status === "Available" || bed.status === "Vacating Soon").length === 0 && (
-              <div className="py-6 text-center text-xs text-muted-foreground font-medium border border-dashed rounded-lg">
-                ⚠️ All system beds are currently occupied. Clear downstream channels inside Admin Panel.
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      </div>
 
     </div>
-  )
-}
+
+  </div>
+)}
+          </div>
+  )}
