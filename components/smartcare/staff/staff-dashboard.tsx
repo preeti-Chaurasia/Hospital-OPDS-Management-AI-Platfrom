@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect,useMemo } from "react"
 
 import {
   AlertCircle,
@@ -12,16 +12,26 @@ import {
   QrCode,
   Search,
   AlertTriangle,
-  Bed,
+  Sparkles,
+  BedDouble,
   LayoutDashboard,
   UserPlus,
   Users,
   Activity,
   UploadCloud,
-  FileText
+  FileText,
 } from "lucide-react"
+import { Panel, PanelHeader, Badge, Stat } from "../ui"
 import { type PatientVitals } from "@/lib/medical-data"
 import { cn } from "@/lib/utils"
+import {
+  BED_STATUS_STYLES,
+  BedStatus,
+  buildBeds,
+  WARDS,
+  getVitalsRecommendations,
+  type Bed,
+} from "@/lib/medical-data"
 
 const PRIORITY_STYLES = {
   emergency: {
@@ -63,6 +73,15 @@ const [labTests, setLabTests] = useState<any[]>([])
   const [expandedLabTest, setExpandedLabTest] = useState<string | null>(null)
   const [loading,setLoading]=useState(true)
   const [labRemarks, setLabRemarks] = useState<Record<string, string>>({})
+  const [beds, setBeds] = useState<Bed[]>(() => buildBeds())
+const [ward, setWard] = useState<(typeof WARDS)[number] | "All">("All")
+const [timelineMode, setTimelineMode] = useState<"current" | "predicted">("current")
+const [optimizationLogs, setOptimizationLogs] = useState<string[]>([])
+
+useEffect(() => {
+  console.log("Total Beds:", beds.length)
+}, [beds])
+
 useEffect(()=>{
    fetchDashboard()
 },[])
@@ -104,8 +123,36 @@ setLabTests(data.labTests || [])
   const [recommendedVitals, setRecommendedVitals] = useState<string[]>([])
 
   // Receptionist Token generation logic + mapping queue lists live (Fixed Type Mismatches)
-  const handleRegisterPatient = () => {
+  const handleRegisterPatient = async () => {
     if (newPatientForm.name && newPatientForm.age && newPatientForm.complaint) {
+
+      const response = await fetch("/api/patient/register", {
+  method:"POST",
+  headers:{
+    "Content-Type":"application/json"
+  },
+  body:JSON.stringify({
+    full_name:newPatientForm.name,
+    phone:newPatientForm.phone,
+    age:parseInt(newPatientForm.age),
+    gender:newPatientForm.sex,
+    chief_complaint:newPatientForm.complaint,
+
+    owner_patient_id:null,
+    relationship:"self"
+  })
+})
+
+
+const result = await response.json()
+
+console.log("REGISTER RESULT:",result)
+
+
+if(!result.success){
+  alert("Patient registration failed")
+  return
+}
       const nextTokenNum = 122 + queueEntries.length
       const tokenGenerated = `A-${nextTokenNum}`
 
@@ -134,8 +181,8 @@ setLabTests(data.labTests || [])
         registeredTime: "Just Now",
         waitMins: 5,
         priority: (parseInt(newPatientForm.age) > 60 || newPatientForm.complaint.toLowerCase().includes("chest") 
-          ? "emergency" 
-          : "stable") as any, 
+          ? "Emergency" 
+          : "Stable") as any, 
         status: "In Queue" as any 
       }
 
@@ -150,13 +197,7 @@ setLabTests(data.labTests || [])
   }
   
   // FIXED TYPO HERE: Changed "NewPatientForm" to "setNewPatientForm"
-  function getVitalsRecommendations(
-  age: number,
-  sex: string,
-  complaint: string
-) {
-  return []
-}
+
   const handleComplaintChange = (complaint: string) => {
     setNewPatientForm({ ...newPatientForm, complaint })
     if (newPatientForm.age) {
@@ -186,7 +227,85 @@ setLabTests(data.labTests || [])
       ),
     )
   }
+const cycle: Record<BedStatus, BedStatus> = {
+  Occupied: "Vacating Soon",
+  "Vacating Soon": "Available",
+  Available: "Cleaning Required",
+  "Cleaning Required": "Cleaning In Progress",
+  "Cleaning In Progress": "Occupied",
+}
 
+const currentStyles = BED_STATUS_STYLES
+
+const handleTimelinePrediction = () => {
+  setTimelineMode("predicted")
+
+  setOptimizationLogs([
+    "Clinical discharge criteria satisfied for 3 Critical Care profiles.",
+    "ICU-02 & ICU-07 downgraded to General Medicine step-down protocol.",
+    "ICU-09 routed safely to Surgical Ward based on recovery rate patterns.",
+    "Optimized downstream pipeline: Reserved GEN-04, GEN-07, and SURG-02.",
+    "Warning prevented: Avoided emergency block overflow SLA breach by 14%.",
+  ])
+
+  setBeds((currentBeds) =>
+    currentBeds.map((b) => {
+      if (
+        b.id === "ICU-02" ||
+        b.id === "ICU-07" ||
+        b.id === "ICU-09" ||
+        b.id === "PED-02"
+      ) {
+        return {
+          ...b,
+          status: "Available" as BedStatus,
+        }
+      }
+
+      if (
+        b.id === "GEN-01" ||
+        b.id === "GEN-03" ||
+        b.id === "SURG-04"
+      ) {
+        return {
+          ...b,
+          status: "Vacating Soon" as BedStatus,
+        }
+      }
+
+      return b
+    })
+  )
+}
+
+const resetTimeline = () => {
+  setTimelineMode("current")
+  setOptimizationLogs([])
+  setBeds(buildBeds())
+}
+
+const visible = useMemo(() => {
+  return ward === "All"
+    ? beds
+    : beds.filter((b) => b.ward === ward)
+}, [beds, ward])
+
+const counts = useMemo(() => {
+const c = {
+  Occupied: 0,
+  Available: 0,
+  "Vacating Soon": 0,
+  "Cleaning Required": 0,
+  "Cleaning In Progress": 0,
+}
+  visible.forEach((b) => {
+    if (b.status in c) {
+      c[b.status as keyof typeof c]++
+    }
+  })
+
+  return c
+}, [visible])
   /* =========================================================================
       VIEW 1: RECEPTIONIST + LAB OPERATIONAL CONSOLE DASHBOARD VIEW
       ========================================================================= */
@@ -510,6 +629,179 @@ q.chief_complaint?.toLowerCase().includes("chest"))
       </div>
     )
   }
+if (section === "beds") {
+ 
+      /* ------------------------------- Bed matrix ------------------------------ */
+
+
+  return (
+    <div className="space-y-5">
+      <div className="rounded-xl border border-primary/20 bg-primary/5 p-5 shadow-sm">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
+          <div className="flex items-start gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-md">
+              <Sparkles className="h-5 w-5" />
+            </span>
+            <div>
+              <h3 className="text-sm font-bold uppercase tracking-wider text-foreground flex items-center gap-2">
+                Predictive Resource Logistics Core Engine
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5 max-w-2xl">
+                Simulates predictive downstream ward flow. Our ML engine matches upcoming ICU step-down clearances with expected general and surgical bed availabilities 12 hours in advance to eliminate bottleneck overheads.
+              </p>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-1.5 rounded-lg border bg-card p-1 shadow-sm shrink-0 self-start lg:self-auto">
+            <button 
+              type="button"
+              onClick={resetTimeline}
+              className={cn(
+                "px-3 py-1.5 text-xs font-bold rounded-md transition",
+                timelineMode === "current" ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground hover:bg-accent"
+              )}
+            >
+              ⌛ Realtime (Live)
+            </button>
+            <button 
+              type="button"
+              onClick={handleTimelinePrediction}
+              className={cn(
+                "px-3 py-1.5 text-xs font-bold rounded-md transition flex items-center gap-1.5",
+                timelineMode === "predicted" ? "bg-amber-500 text-white shadow shadow-amber-500/20" : "text-muted-foreground hover:bg-accent"
+              )}
+            >
+              🔮 Predict Next 12h Flow
+            </button>
+          </div>
+        </div>
+
+        {optimizationLogs.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-primary/10 grid gap-2 sm:grid-cols-2 md:grid-cols-3">
+            <div className="sm:col-span-2 md:col-span-3">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 mb-2">
+                ⚡ Realtime Auto-Allocation Optimization Actions Taken:
+              </p>
+            </div>
+            {optimizationLogs.map((log, index) => (
+              <div key={index} className="flex items-start gap-2 bg-background/60 rounded-md p-2 border border-border/50 text-xs">
+                <CheckCircle className="h-3.5 w-3.5 text-success shrink-0 mt-0.5" />
+                <span className="text-muted-foreground leading-tight">{log}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-4">
+        <Stat label="Occupied" value={counts.Occupied} sub="Active patients" icon={<BedDouble className="h-4 w-4" />} tone="danger" />
+        <Stat label="Available" value={counts.Available} sub="Ready for allocation" icon={<BedDouble className="h-4 w-4" />} tone="success" />
+        <Stat label="Vacating Soon" value={counts["Vacating Soon"]} sub="Predicted discharge" icon={<BedDouble className="h-4 w-4" />} tone="warning" />
+     <Stat
+  label="Cleaning Required"
+  value={counts["Cleaning Required"]}
+  sub="Needs housekeeping"
+  icon={<BedDouble className="h-4 w-4" />}
+/>
+
+<Stat
+  label="Cleaning In Progress"
+  value={counts["Cleaning In Progress"]}
+  sub="Housekeeping running"
+  icon={<BedDouble className="h-4 w-4" />}
+/>
+      </div>
+
+      <Panel>
+        <PanelHeader
+          title="Predictive Bed Allocation Matrix"
+          subtitle="Click any bed to cycle its status manually"
+          icon={<BedDouble className="h-4 w-4" />}
+          actions={
+            <div className="flex flex-wrap gap-1.5">
+              {(["All", ...WARDS] as const).map((w) => (
+                <button
+                  key={w}
+                  type="button"
+                  onClick={() => setWard(w)}
+                  className={cn(
+                    "rounded-md border px-2.5 py-1 text-xs font-medium transition",
+                    ward === w
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-card text-foreground hover:bg-accent",
+                  )}
+                >
+                  {w}
+                </button>
+              ))}
+            </div>
+          }
+        />
+        <div className="space-y-5 p-4">
+          {(ward === "All" ? WARDS : [ward]).map((w) => {
+            const wardBeds = beds.filter((b) => b.ward === w)
+            return (
+              <div key={w}>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {w} · {wardBeds.length} beds
+                </p>
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
+                  {wardBeds.map((b) => (
+                    <button
+                      key={b.id}
+                      type="button"
+                      onClick={() =>
+                        setBeds((list) =>
+                          list.map((x) => (x.id === b.id ? { ...x, status: cycle[x.status] as BedStatus } : x)),
+                        )
+                      }
+                      className={cn(
+                        "rounded-md border p-2 text-left transition hover:ring-2 hover:ring-ring/30",
+                        currentStyles[b.status],
+                      )}
+                    >
+                      <span className="block font-mono text-xs font-bold">{b.id}</span>
+                      <span className="mt-0.5 block text-[10px] leading-tight">{b.status}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+        
+        <div className="flex flex-wrap items-center gap-4 border-t border-border px-4 py-3 text-xs">
+          <Legend cls="bg-destructive" label="Occupied" />
+          <Legend cls="bg-success" label="Available" />
+          <Legend cls="bg-warning" label="Vacating Soon" />
+       <Legend
+cls="bg-orange-500"
+label="Cleaning Required"
+/>
+
+<Legend
+cls="bg-blue-500"
+label="Cleaning In Progress"
+/>
+        </div>
+      </Panel>
+    </div>
+  )
+}
+  function Legend({
+  cls,
+  label,
+}: {
+  cls: string
+  label: string
+}) {
+  return (
+    <span className="flex items-center gap-1.5 text-muted-foreground">
+      <span className={cn("h-2.5 w-2.5 rounded-sm", cls)} />
+      {label}
+    </span>
+  )
+}
 
   return null
 }

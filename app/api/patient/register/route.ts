@@ -52,6 +52,8 @@ relationship
         );
 
         const patientId = patient.rows[0].patient_id;
+if(relationship){
+
 await db.query(
 `
 INSERT INTO family_members
@@ -66,11 +68,13 @@ VALUES
 ($1,$2,$3)
 `,
 [
-owner_patient_id ?? patientId,
+owner_patient_id || patientId,
 patientId,
 relationship
 ]
 );
+
+}
         //------------------------------------------------
         // Appointment
         //------------------------------------------------
@@ -89,20 +93,20 @@ relationship
                 queue_position,
                 estimated_wait,
                 status
-            )
+)
 
-            VALUES
-            (
-                $1,
-                CONCAT('A-',floor(random()*900+100)),
-                'General Medicine',
-                'Dr. Amelia',
-                CURRENT_DATE,
-                CURRENT_TIME,
-                1,
-                10,
-                'Waiting'
-            )
+VALUES
+(
+    $1,
+    CONCAT('A-',floor(random()*900+100)),
+    'General Medicine',
+    'Dr. Amelia',
+    CURRENT_DATE,
+    CURRENT_TIME,
+    1,
+    10,
+    'In Queue'
+)
 
             RETURNING appointment_id
             `,
@@ -111,10 +115,17 @@ relationship
         );
           const appointmentId = appointment.rows[0].appointment_id;
 
+          console.log(
+"Patient Created:",
+patientId,
+"Appointment Created:",
+appointmentId
+);
 await db.query(
 `
 INSERT INTO admission_pipeline
 (
+    
     appointment_id,
     current_stage,
     predicted_room,

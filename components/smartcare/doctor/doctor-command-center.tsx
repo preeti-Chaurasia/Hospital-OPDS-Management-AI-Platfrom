@@ -1,15 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { socket } from "@/lib/socket"
 import {
-  INITIAL_QUEUE,
   DIAGNOSIS_CODES,
   COMMON_MEDS,
   buildBeds,
   BED_STATUS_STYLES,
   PRIORITY_STYLES,
-  WARDS,
-  PHARMACY, // ✅ ENSURED CORE FORMULARY MAP IMPORT
   type QueuePatient,
 } from "@/lib/medical-data"
 import {
@@ -29,28 +27,113 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
+type Bed = {
+  bed_id:number
+  bed_number:string
+  ward_name:string
+  bed_type:string
+  status:string
+  occupied_by:number | null
+  predicted_available:string | null
+  last_updated:string
+}
+
 export function DoctorCommandCenter() {
-  const [queue, setQueue] = useState<QueuePatient[]>(INITIAL_QUEUE)
-  const [activePatient, setActivePatient] = useState<QueuePatient | null>(INITIAL_QUEUE[0])
-  const [selectedBufferSlot, setSelectedBufferSlot] = useState<string | null>(null)
   
+const [queue,setQueue]=useState<QueuePatient[]>([])
+
+const [activePatient,setActivePatient] =
+useState<QueuePatient | null>(null)
+
+
+const [backupPatient,setBackupPatient] =
+useState<QueuePatient | null>(null)
+  const [selectedBufferSlot, setSelectedBufferSlot] = useState<string | null>(null)
+  const [selectedLab,setSelectedLab]=useState("")
+  const [selectedOrder,setSelectedOrder]=useState<any>(null)
   // Backup pointer to remember which patient was open before clicking the buffer slot
-  const [backupPatient, setBackupPatient] = useState<QueuePatient | null>(INITIAL_QUEUE[0])
   
   const [isAdmitModalOpen, setIsAdmitModalOpen] = useState(false)
   const [emergencyMode, setEmergencyMode] = useState(false)
-  
+  const [labReports,setLabReports]=useState<any[]>([])
   // Clinical States Form Input
   const [progressNote, setProgressNote] = useState("")
   const [selectedDiagnosis, setSelectedDiagnosis] = useState("")
-  const [prescribedMeds, setPrescribedMeds] = useState<string[]>([])
+ const [prescribedMeds, setPrescribedMeds] = useState<any[]>([])
   const [searchMeds, setSearchMeds] = useState("")
+const [medicines,setMedicines]=useState<any[]>([])
 
+useEffect(() => {
+
+  const loadQueue = async () => {
+
+    const res = await fetch("/api/doctor/queue")
+    const data = await res.json()
+
+    setQueue(data)
+
+    if(data.length>0){
+      setActivePatient(data[0])
+      setBackupPatient(data[0])
+    }
+
+  }
+
+  loadQueue()
+
+  socket.on("queueUpdated",(newQueue)=>{
+
+    setQueue(newQueue)
+
+    if(newQueue.length>0 && !activePatient){
+
+      setActivePatient(newQueue[0])
+      setBackupPatient(newQueue[0])
+
+    }
+
+  })
+
+  return ()=>{
+
+    socket.off("queueUpdated")
+
+  }
+
+},[])
+
+useEffect(()=>{
+
+const loadMedicines=async()=>{
+
+const res=await fetch("/api/doctor/medicines")
+
+const data=await res.json()
+
+setMedicines(data)
+
+}
+
+loadMedicines()
+
+socket.on("medicineUpdated",()=>{
+
+loadMedicines()
+
+})
+
+return ()=>{
+
+socket.off("medicineUpdated")
+
+}
+
+},[])
   // ─── ✅ NEW STATE: REAL-TIME PHARMACY DATA LOCK BANNER STATES ───
   const [stockWarning, setStockWarning] = useState<{ type: "danger" | "warning"; message: string } | null>(null)
 
   // ─── UPDATED: CONVERTED TO REACTIVE STATE MATRIX FOR IMMUTABLE FLOWS ───
-  const [beds, setBeds] = useState(() => buildBeds())
+const [beds,setBeds]=useState<any[]>([])
 const [selectedBed, setSelectedBed] = useState<any>(null)
   // Emergency Button Handler
   const handleToggleEmergency = () => {
@@ -92,48 +175,386 @@ const [selectedBed, setSelectedBed] = useState<any>(null)
     }
   }
 
-  // ─── NEW HANDLER: DIRECT ALLOCATION FLOW FLIPPER ───
-const handleDischargePatient = (bedId: string) => {
-  setBeds((currentBeds) =>
-    currentBeds.map((b) =>
-      b.id === bedId
-        ? { ...b, status: "Cleaning Required" }
-        : b
-    )
-  )
+  // ─── NEW HANDLER: DIRECT ALLOCATION FLOW FLIPPER
+  //  ───
+const handleDischargePatient = async(bedId:string)=>{
+
+
+try{
+
+
+const res = await fetch("/api/doctor/beds/discharge",
+{
+
+method:"POST",
+
+headers:{
+"Content-Type":"application/json"
+},
+
+body:JSON.stringify({
+
+bed_id:bedId
+
+})
+
+})
+
+
+const data = await res.json()
+
+
+if(data.success){
+
+socket.emit("refreshBeds")
+setBeds((prev)=>
+
+prev.map((b)=>
+Number(b.bed_id)===Number(bedId)
+
+?
+{
+...b,
+status:"Cleaning Required"
 }
 
+:
+b
+
+)
+
+)
+
+
+alert("Patient Discharged")
+
+}
+
+
+}
+catch(error){
+
+console.log("Discharge Error",error)
+
+}
+
+
+}
+const handleSavePrescription = async()=>{
+
+try{
+
+const response = await fetch(
+"/api/doctor/prescription",
+{
+method:"POST",
+
+headers:{
+"Content-Type":"application/json"
+},
+
+body:JSON.stringify({
+
+appointment_id: activePatient?.appointmentId,
+
+doctor_id:1,
+
+medicines: prescribedMeds
+
+})
+
+}
+)
+
+
+const data = await response.json()
+
+
+if(data.success){
+
+socket.emit(
+"medicineUpdated"
+)
+
+alert("Prescription Saved")
+
+setPrescribedMeds([])
+
+}
+else{
+
+alert(data.message)
+
+}
+
+
+}
+catch(error){
+
+console.log("Prescription Error",error)
+
+alert("Prescription Failed")
+
+}
+
+}
+const handleAddMedicine=(medicineName:string)=>{
+
+const exists = prescribedMeds.find(
+(m)=>m.name===medicineName
+)
+
+if(!exists){
+
+setPrescribedMeds([
+...prescribedMeds,
+{
+name:medicineName,
+dosage:"500mg",
+frequency:"2 times/day",
+duration:"5 days",
+instructions:"",
+quantity:1
+}
+])
+
+}
+
+}
+
+useEffect(()=>{
+
+const loadBeds=async()=>{
+
+const res=await fetch("/api/doctor/beds")
+
+const data=await res.json()
+
+setBeds(data)
+
+}
+
+loadBeds()
+
+socket.on("bedsUpdated",(updatedBeds)=>{
+
+setBeds(updatedBeds)
+
+})
+
+return ()=>{
+
+socket.off("bedsUpdated")
+
+}
+
+},[])
+
+const handleAdmitPatient = async()=>{
+
+
+if(!selectedBed || !activePatient)
+return
+
+
+
+const res = await fetch(
+"/api/doctor/admission",
+{
+
+method:"POST",
+
+headers:{
+"Content-Type":"application/json"
+},
+
+body:JSON.stringify({
+
+appointment_id:
+activePatient.appointmentId,
+
+patient_id:
+activePatient.id,
+
+doctor_id:1,
+
+bed_id:
+selectedBed.bed_id
+
+})
+
+}
+
+)
+
+
+const data = await res.json()
+
+
+
+if(data.success){
+socket.emit("refreshQueue")
+socket.emit("refreshBeds")
+alert("Patient Admitted")
+
+setQueue(prev=>
+prev.filter(
+p=>p.id!==activePatient.id
+)
+)
+
+setActivePatient(null)
+setIsAdmitModalOpen(false)
+
+
+}
+
+}
+const handleSaveNotes = async()=>{
+
+
+try{
+
+
+const res = await fetch(
+"/api/doctor/notes",
+{
+
+method:"POST",
+
+headers:{
+"Content-Type":"application/json"
+},
+
+
+body:JSON.stringify({
+
+appointment_id:
+activePatient?.appointmentId,
+
+doctor_id:1,
+
+diagnosis:selectedDiagnosis,
+
+clinical_note:progressNote
+
+})
+
+
+}
+
+)
+
+
+const data = await res.json()
+
+
+if(data.success){
+
+alert("Notes Saved")
+
+}
+
+
+}
+catch(error){
+
+console.log(error)
+
+}
+
+
+}
+const handleLabRequest=async()=>{
+
+
+const res=await fetch(
+"/api/doctor/lab-request",
+{
+
+method:"POST",
+
+headers:{
+"Content-Type":"application/json"
+},
+
+body:JSON.stringify({
+
+appointment_id:
+activePatient?.appointmentId,
+
+patient_id:
+activePatient?.id,
+
+doctor_id:1,
+
+test_name:selectedLab,
+
+priority:"Normal"
+
+})
+
+}
+
+)
+
+
+const data=await res.json()
+
+
+socket.emit("labRequested", {
+  appointment_id: activePatient?.appointmentId
+})
+if (data.success) {
+  alert("Lab Test Requested Successfully");
+
+  setSelectedLab("");
+
+  const reports = await fetch(
+    `/api/doctor/lab-reports?appointment_id=${activePatient?.appointmentId}`
+  );
+
+  const reportData = await reports.json();
+
+  setLabReports(reportData);
+}
+}
+useEffect(()=>{
+
+if(!activePatient) return
+
+const loadReports=async()=>{
+
+const res=await fetch(`/api/doctor/lab-reports?appointment_id=${activePatient.appointmentId}`)
+
+const data=await res.json()
+
+setLabReports(data)
+
+}
+loadReports();  
+
+socket.on("labReportUpdated", async () => {
+
+const res = await fetch(
+`/api/doctor/lab-reports?appointment_id=${activePatient?.appointmentId}`
+)
+
+const data = await res.json()
+
+setLabReports(data)
+
+})
+
+return ()=>{
+
+socket.off("labReportUpdated")
+
+}
+
+},[activePatient])
   // ─── ✅ MODIFIED HANDLER: AUTONOMOUS PHARMACY STOCK GUARDRAIL ENGINE ───
-  const handleAddMedicine = (medName: string) => {
-    const pharmacyItem = PHARMACY.find((p) => p.name.toLowerCase() === medName.toLowerCase())
 
-    if (pharmacyItem) {
-      const ratio = pharmacyItem.stock / pharmacyItem.reorder
-      
-      // A. CRITICAL CASE: Out of Stock Check
-      if (pharmacyItem.stock === 0) {
-        setStockWarning({
-          type: "danger",
-          message: `🛑 CRITICAL ALERT: "${medName}" is completely OUT OF STOCK in pharmacy inventory! Please select an alternative formulary.`
-        })
-        return // Blocks adding to prescription list completely!
-      }
-      
-      // B. WARNING CASE: Low Stock Margin Metrics
-      if (ratio < 1) {
-        setStockWarning({
-          type: "warning",
-          message: `⚠️ INVENTORY ALERT: "${medName}" has LOW STOCK remaining (${pharmacyItem.stock} ${pharmacyItem.unit} left). Replenishment is pending.`
-        })
-      } else {
-        setStockWarning(null) // Clear warnings if stock levels are safe
-      }
-    }
-
-    if (!prescribedMeds.includes(medName)) {
-      setPrescribedMeds([...prescribedMeds, medName])
-    }
-  }
 
   // Safely restore the previous active patient's card layout context upon closing buffer slot
   const handleCloseBufferView = () => {
@@ -153,13 +574,18 @@ const handleDischargePatient = (bedId: string) => {
         <div className="space-y-2">
           {queue.map((p, index) => {
             const isSelected = activePatient?.id === p.id && !selectedBufferSlot
-            const prio = PRIORITY_STYLES[p.priority]
+          const prio =
+PRIORITY_STYLES[p.priority] ||
+{
+ cls:"bg-gray-100 text-gray-700",
+ label:"Normal"
+}
             
             // Render regular patient card
             const patientCard = (
-              <div
-                key={p.id}
-                onClick={() => {
+             <div
+ key={`${p.id}-${index}`}
+ onClick={()=>{
                   setActivePatient(p)
                   setBackupPatient(p) // Remember this selection pointer context
                   setSelectedBufferSlot(null)
@@ -194,8 +620,8 @@ const handleDischargePatient = (bedId: string) => {
             const shouldInjectBufferAfter = (index + 1) % 5 === 0
             const bufferRoomNumber = Math.ceil((index + 1) / 5)
 
-            return (
-              <div key={`wrapper-${p.id}`} className="space-y-2">
+         return (
+  <div key={`wrapper-${p.id}-${index}`} className="space-y-2">
                 {patientCard}
                 {shouldInjectBufferAfter && (
                   <div
@@ -315,7 +741,7 @@ const handleDischargePatient = (bedId: string) => {
                   <div>
                     <p className="font-bold text-muted-foreground mb-1">Allergies Mapped</p>
                     <div className="flex flex-wrap gap-1">
-                      {activePatient.allergies.length > 0 ? (
+                      {activePatient.allergies?.length > 0 ? (
                         activePatient.allergies.map((a) => (
                           <span key={a} className="rounded bg-destructive/10 border border-destructive/20 text-destructive font-semibold px-2 py-0.5 text-[10px]">{a}</span>
                         ))
@@ -355,9 +781,108 @@ const handleDischargePatient = (bedId: string) => {
                       <option value="">Select ICD Code...</option>
                       {DIAGNOSIS_CODES.map((d) => (
                         <option key={d.code} value={d.code}>{d.code} - {d.label}</option>
+                        
                       ))}
                     </select>
+                        <button
+onClick={handleSavePrescription}
+className="w-full rounded-md bg-green-600 py-2 text-xs font-bold text-white"
+>
+Save Prescription
+</button>
+<button
+
+onClick={handleSaveNotes}
+
+className="w-full bg-blue-600 text-white py-2 rounded"
+
+>
+Save Clinical Notes
+</button>
+<select
+
+value={selectedLab}
+
+onChange={(e)=>setSelectedLab(e.target.value)}
+
+>
+
+<option value="">
+Select Lab Test
+</option>
+
+<option>
+CBC Blood Test
+</option>
+
+<option>
+X-Ray
+</option>
+
+<option>
+MRI Scan
+</option>
+
+<option>
+CT Scan
+</option>
+
+
+</select>
+
+
+<button
+
+onClick={handleLabRequest}
+
+className="bg-blue-600 text-white p-2 rounded"
+
+>
+Request Lab Test
+</button>
                   </div>
+                 {labReports.length > 0 && (
+
+<div className="border rounded p-3">
+
+<h3 className="font-bold mb-2">
+Lab Reports
+</h3>
+
+{labReports.map((r)=>(
+
+<div
+key={r.report_id}
+onClick={()=>setSelectedOrder(r)}
+className="border p-2 mt-2 rounded cursor-pointer hover:bg-gray-100"
+>
+
+<p>{r.report_name}</p>
+
+<p>Status: {r.status}</p>
+
+<p>{r.remarks}</p>
+
+{r.file_path && (
+
+<a
+href={r.file_path}
+target="_blank"
+rel="noopener noreferrer"
+className="text-blue-600 underline"
+>
+View Report
+</a>
+
+)}
+
+</div>
+
+))}
+
+</div>
+
+)}
 
                   {/* ─── ✅ DYNAMIC LIVE INVENTORY ALERT BANNER CONTAINER ─── */}
                   {stockWarning && (
@@ -392,16 +917,27 @@ const handleDischargePatient = (bedId: string) => {
                     />
                     {searchMeds && (
                       <div className="border border-border rounded bg-card max-h-24 overflow-y-auto p-1 space-y-1 text-[11px]">
-                        {COMMON_MEDS.filter((m) => m.toLowerCase().includes(searchMeds.toLowerCase())).map((m) => (
+                    {medicines
+.filter((m)=>
+m.medicine_name
+.toLowerCase()
+.includes(searchMeds.toLowerCase())
+)
+.map((m)=>(
                           <div
-                            key={m}
-                            onClick={() => {
-                              handleAddMedicine(m)
-                              setSearchMeds("")
-                            }}
+                          key={m.medicine_id}
+
+
+onClick={()=>{
+
+handleAddMedicine(
+m.medicine_name
+)
+
+}}
                             className="p-1 hover:bg-primary/10 rounded cursor-pointer text-foreground font-medium"
                           >
-                            + {m}
+                        + {m.medicine_name}
                           </div>
                         ))}
                       </div>
@@ -410,12 +946,32 @@ const handleDischargePatient = (bedId: string) => {
 
                   {prescribedMeds.length > 0 && (
                     <div className="flex flex-wrap gap-1 bg-secondary/20 p-2 rounded-md border border-border/60">
-                      {prescribedMeds.map((med) => (
-                        <span key={med} className="inline-flex items-center gap-1 rounded bg-primary/10 px-2 py-0.5 text-[11px] text-primary font-medium border border-primary/20">
-                          {med}
-                          <X className="h-2.5 w-2.5 cursor-pointer hover:text-destructive" onClick={() => setPrescribedMeds(prev => prev.filter(m => m !== med))} />
-                        </span>
-                      ))}
+              {prescribedMeds.map((med)=>(
+<span 
+key={med.name}
+className="inline-flex items-center gap-1 rounded bg-primary/10 px-2 py-0.5 text-[11px]"
+>
+
+{med.name}
+
+
+<X
+className="h-2.5 w-2.5 cursor-pointer"
+
+onClick={()=>{
+
+setPrescribedMeds(
+prev=>prev.filter(
+(m)=>m.name!==med.name
+)
+)
+
+}}
+
+/>
+
+</span>
+))}
                     </div>
                   )}
                 </div>
@@ -428,12 +984,44 @@ const handleDischargePatient = (bedId: string) => {
                     <button onClick={() => setIsAdmitModalOpen(true)} className="rounded-md bg-amber-600/10 border border-amber-600/20 py-2 text-xs font-bold text-amber-700 hover:bg-amber-600/20 transition">
                       Admit Patient
                     </button>
-                    <button
-  onClick={() => handleDischargePatient(selectedBed?.id)}
-  className="rounded-md bg-red-600 text-white py-2 text-xs font-bold"
+                    
+<button
+
+onClick={() => {
+
+if(!selectedBed){
+alert("Please select a bed first")
+return
+}
+
+if(selectedBed.bed_id==null){
+alert("Invalid Bed")
+return
+}
+
+handleDischargePatient(
+String(selectedBed.bed_id)
+)
+
+}}
+
+className="rounded-md bg-red-600 text-white py-2 text-xs font-bold"
+
 >
-  Discharge Patient
+Discharge Patient
 </button>
+<button
+
+onClick={handleAdmitPatient}
+
+className="w-full bg-green-600 text-white py-2 rounded"
+
+>
+Confirm Admission
+
+</button>
+
+
                   </div>
 
                   <button onClick={handleCallNextPatient} className="w-full rounded-md bg-primary py-2.5 text-xs font-bold text-primary-foreground shadow hover:opacity-90 transition">
@@ -457,6 +1045,7 @@ const handleDischargePatient = (bedId: string) => {
         ) : null}
       </div>
 
+
       {/* ─── BED MANAGEMENT POPUP: MODIFIED STYLES & EXCLUSIVE FILTERS FOR DOCTOR VIEW ─── */}
       {isAdmitModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs">
@@ -471,17 +1060,25 @@ const handleDischargePatient = (bedId: string) => {
             
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 text-xs font-medium">
               {/* 🔴 EXCLUSIVE STRICT FILTER LOOP RENDERING */}
-              {beds.map((bed) => (
-                 <div
-  key={bed.id}
-  onClick={() => setSelectedBed(bed)}
-  className={cn(
-    "border p-3 rounded-lg text-center cursor-pointer transition transform hover:scale-105 hover:ring-2 hover:ring-ring/20",
-    BED_STATUS_STYLES[bed.status]
-  )}
+              {beds.map((bed,index) => (
+                <div
+key={`${bed.bed_id}-${bed.bed_number}-${index}`}
+onClick={()=>setSelectedBed(bed)}
+className={cn(
+"border p-3 rounded-lg text-center cursor-pointer transition",
+BED_STATUS_STYLES[
+ bed.status as keyof typeof BED_STATUS_STYLES
+] || "bg-gray-100"
+)}
 >
-                    <p className="font-bold text-sm">{bed.id}</p>
-                    <p className="text-[10px] mt-0.5 opacity-80">{bed.ward}</p>
+                    <p className="font-bold text-sm">{bed.bed_id}</p>
+                   <p className="font-bold text-sm">
+ {bed.bed_number}
+</p>
+
+<p className="text-[10px]">
+ {bed.ward_name}
+</p>
                     <span className="text-[9px] mt-2 block font-semibold px-1 py-0.5 rounded bg-background/50 uppercase tracking-wide">
                       {bed.status}
                     </span>
@@ -494,10 +1091,26 @@ const handleDischargePatient = (bedId: string) => {
   <div className="mt-4 rounded-lg border p-4 bg-card">
     <h3 className="font-bold text-lg">Bed Details</h3>
 
-    <p><strong>Bed ID:</strong> {selectedBed.id}</p>
-    <p><strong>Ward:</strong> {selectedBed.ward}</p>
-    <p><strong>Status:</strong> {selectedBed.status}</p>
-    <p><strong>Last Updated:</strong> {selectedBed.lastUpdated}</p>
+    <p>
+<strong>Bed Number:</strong> 
+{selectedBed.bed_number}
+</p>
+
+<p>
+<strong>Ward:</strong>
+{selectedBed.ward_name}
+</p>
+
+<p>
+<strong>Status:</strong>
+{selectedBed.status}
+</p>
+
+<p>
+<strong>Last Updated:</strong>
+{selectedBed.last_updated}
+</p>
+    <p><strong>Last Updated:</strong> {selectedBed.last_updated}</p>
 
   
   </div>

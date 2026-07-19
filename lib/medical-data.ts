@@ -6,6 +6,7 @@ export interface QueuePatient {
   id: string
   token: string
   name: string
+  appointmentId?:number
   age: number
   sex: "M" | "F"
   complaint: string
@@ -20,6 +21,7 @@ export interface QueuePatient {
   }
   allergies: string[]
   history: string[]
+  
 }
 
 export const PRIORITY_STYLES: Record<
