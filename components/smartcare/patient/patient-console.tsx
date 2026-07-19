@@ -411,6 +411,8 @@ const dummyVitals =
               subtitle="Live sync with pharmacy fulfillment counter"
               icon={<Pill className="h-4 w-4" />}
             />
+              
+
             <div className="p-4 space-y-3">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
@@ -563,6 +565,16 @@ const patientMemoryRef = useRef({
   symptoms: "",
 });
 
+const [selectedLanguage, setSelectedLanguage] = useState("en-IN");
+const languages = [
+  { label: "🇬🇧 English", value: "en-IN" },
+  { label: "🇮🇳 हिन्दी", value: "hi-IN" },
+  { label: "🇮🇳 ગુજરાતી", value: "gu-IN" },
+  { label: "🇮🇳 मराठी", value: "mr-IN" },
+  { label: "🇮🇳 தமிழ்", value: "ta-IN" },
+  { label: "🇮🇳 తెలుగు", value: "te-IN" },
+];
+
   const recognitionRef = useRef<any>(null)
   const idRef = useRef(1)
 
@@ -575,7 +587,7 @@ const patientMemoryRef = useRef({
     const rec = new SR()
     rec.continuous = false
     rec.interimResults = false
-    rec.lang = "en-US"
+    rec.lang = selectedLanguage;
     rec.onresult = (e: any) => {
       const transcript = e.results[0][0].transcript as string
       handleTranscript(transcript)
@@ -584,6 +596,16 @@ const patientMemoryRef = useRef({
     rec.onerror = () => setListening(false)
     recognitionRef.current = rec
   }, [])
+
+  useEffect(() => {
+
+  if (recognitionRef.current) {
+
+    recognitionRef.current.lang = selectedLanguage;
+
+  }
+
+}, [selectedLanguage]);
 
   function pushMsg(from: "bot" | "user", text: string) {
     setMessages((m) => [...m, { id: idRef.current++, from, text }])
@@ -636,8 +658,9 @@ audio.play();
       },
 
       body: JSON.stringify({
-        message: transcript,
-      }),
+  message: transcript,
+  selectedLanguage,
+}),
 
     });
 
@@ -758,7 +781,7 @@ else {
 
     pushMsg("bot", answer);
 
-    await speak(answer, ai.language);
+    await speak(answer, selectedLanguage);
 
   }
 
@@ -797,10 +820,43 @@ else {
           subtitle="Browser-native speech recognition · autonomous triage parsing"
           icon={<Bot className="h-4 w-4" />}
           actions={
-            <Badge className={supported ? "bg-success/10 text-success border-success/30" : "bg-warning/15 text-warning border-warning/40"}>
-              {supported ? "Mic ready" : "Demo mode"}
-            </Badge>
-          }
+<div className="flex items-center gap-2">
+
+<select
+className="border rounded-md px-2 py-1 text-sm"
+value={selectedLanguage}
+onChange={(e)=>setSelectedLanguage(e.target.value)}
+>
+
+{languages.map(lang=>(
+
+<option
+key={lang.value}
+value={lang.value}
+>
+
+{lang.label}
+
+</option>
+
+))}
+
+</select>
+
+<Badge
+className={
+supported
+? "bg-success/10 text-success border-success/30"
+: "bg-warning/15 text-warning border-warning/40"
+}
+>
+
+{supported ? "Mic Ready" : "Demo"}
+
+</Badge>
+
+</div>
+}
         />
         <div className="flex-1 space-y-3 overflow-y-auto p-4" style={{ maxHeight: 420 }}>
           {messages.map((m) => (

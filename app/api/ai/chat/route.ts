@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 
 export async function POST(req: NextRequest) {
   try {
-    const { message } = await req.json();
+    const { message, selectedLanguage } = await req.json();
 
     if (!message) {
       return NextResponse.json(
@@ -17,13 +17,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const ai = await chatWithAI(message);
+    const ai = await chatWithAI(message, selectedLanguage);
 
     console.log("AI OUTPUT:", ai);
 
-    // =========================
+    
     // Doctor Availability
-    // =========================
+  
     if (ai.intent === "doctor_availability") {
 
       const doctor = await db.query(
@@ -47,9 +47,9 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // =========================
+    
     // Department Location
-    // =========================
+    
     if (ai.intent === "department_location") {
 
       const department = await db.query(
@@ -76,9 +76,9 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // =========================
+    
     // Registration
-    // =========================
+    
     if (ai.intent === "registration") {
 
       return NextResponse.json({
@@ -90,9 +90,9 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // =========================
+  
     // Queue Status
-    // =========================
+   
     if (ai.intent === "queue_status") {
 
       return NextResponse.json({

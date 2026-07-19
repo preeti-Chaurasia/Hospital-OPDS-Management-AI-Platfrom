@@ -4,7 +4,10 @@ const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY!,
 });
 
-export async function smartChat(message:string){
+export async function smartChat(
+  message: string,
+  language: string = "en-IN"
+) {
 
 const completion=await groq.chat.completions.create({
 
