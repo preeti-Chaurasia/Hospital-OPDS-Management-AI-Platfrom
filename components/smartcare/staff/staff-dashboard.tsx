@@ -87,22 +87,27 @@ useEffect(()=>{
 },[])
 async function fetchDashboard() {
   try {
-    const res = await fetch("/api/staff/dashboard")
+    const res = await fetch("/api/staff/dashboard");
 
-    const data = await res.json()
+    console.log("Status:", res.status);
 
-   setDashboardData(data)
+    if (!res.ok) {
+      throw new Error("API Error " + res.status);
+    }
 
-setQueueEntries(data.queue || [])
+    const data = await res.json();
 
-setLabTests(data.labTests || [])
+    console.log(data);
+
+    setDashboardData(data);
+    setQueueEntries(data.queue || []);
+    setLabTests(data.labTests || []);
   } catch (err) {
-    console.error(err)
+    console.error("FETCH ERROR:", err);
   } finally {
-    setLoading(false)
+    setLoading(false);
   }
 }
-
   
   const [newPatientForm, setNewPatientForm] = useState({
     name: "",
